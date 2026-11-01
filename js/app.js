@@ -73,15 +73,7 @@
     'newGridBtn',
     'board',
     'goalCoord',
-    'trapStat',
-    'safeStat',
-    'routeStat',
-    'densityStat',
-    'recordRound',
-    'fingerprint',
-    'legendList',
     'howBtn',
-    'printBtn',
     'howModal',
     'winModal',
     'winStars',
@@ -344,13 +336,9 @@
     el.topRound.textContent = grid.cols + ' × ' + grid.rows + ' · Round ' + padRound(grid.round);
     el.gridId.textContent = grid.gridId;
     el.goalCoord.textContent = Core.coordOf(grid.rows, grid.goal.r, grid.goal.c);
-    el.recordRound.textContent = '#' + padRound(grid.round);
-    el.fingerprint.textContent = grid.fingerprint;
 
     resetRoundState();
     renderBoard();
-    renderLegend();
-    updateStats();
     updateHud();
     updateTimerDisplay();
     updateRouteButton();
@@ -482,63 +470,6 @@
     use.setAttribute('href', '#' + symbolId);
     svg.appendChild(use);
     return svg;
-  }
-
-  function renderLegend() {
-    const grid = state.grid;
-    if (!grid) {
-      return;
-    }
-    const counts = Core.TRAP_TYPES.map(function () {
-      return 0;
-    });
-    for (let i = 0; i < grid.types.length; i += 1) {
-      if (grid.types[i] >= 0) {
-        counts[grid.types[i]] += 1;
-      }
-    }
-
-    el.legendList.innerHTML = '';
-    let shown = 0;
-
-    Core.TRAP_TYPES.forEach(function (type, index) {
-      if (counts[index] === 0) {
-        return;
-      }
-      shown += 1;
-      const item = document.createElement('li');
-      item.title = type.name + ': ' + type.blurb;
-      item.appendChild(svgUse('trap-' + type.id));
-      const name = document.createElement('span');
-      name.className = 'legend-name';
-      name.textContent = type.name;
-      const count = document.createElement('span');
-      count.className = 'legend-count';
-      count.textContent = '×' + counts[index];
-      item.appendChild(name);
-      item.appendChild(count);
-      el.legendList.appendChild(item);
-    });
-
-    if (shown === 0) {
-      const item = document.createElement('li');
-      item.textContent = 'Suspiciously quiet…';
-      el.legendList.appendChild(item);
-    }
-  }
-
-  function updateStats() {
-    const grid = state.grid;
-    if (!grid) {
-      return;
-    }
-    const freeTiles = Core.freeTileCount(grid.rows, grid.cols);
-    const danger = freeTiles > 0 ? Math.round((grid.trapCount / freeTiles) * 100) : 0;
-    el.trapStat.textContent = String(grid.trapCount);
-    el.safeStat.textContent = String(grid.safeCount);
-    el.routeStat.textContent = String(grid.path.length - 1);
-    el.densityStat.textContent = danger + '%';
-    el.densityStat.title = 'Share of trap-eligible tiles that hide a trap.';
   }
 
   function placeToken(cell) {
@@ -820,15 +751,11 @@
     if (!grid) {
       return;
     }
-    const freeTiles = Core.freeTileCount(grid.rows, grid.cols);
-    const danger = freeTiles > 0 ? Math.round((grid.trapCount / freeTiles) * 100) : 0;
     const text = [
       'TrapGrid — Round ' + padRound(grid.round),
       grid.cols + ' × ' + grid.rows + ' arena',
       'Grid ID: ' + grid.gridId,
       'Fingerprint: ' + grid.fingerprint,
-      'Traps: ' + grid.trapCount + '/' + grid.rows * grid.cols + ' tiles (' + danger + '% of open tiles)',
-      'Shortest safe route: ' + (grid.path.length - 1) + ' steps',
       'Status: ' + (state.finished ? 'cleared' : state.timerStarted ? 'in progress' : 'ready')
     ].join('\n');
     copyText(text).then(function (ok) {
@@ -957,11 +884,6 @@
     });
 
     el.copyIdBtn.addEventListener('click', copyRecord);
-    el.printBtn.addEventListener('click', function () {
-      if (state.grid) {
-        window.print();
-      }
-    });
     el.howBtn.addEventListener('click', function () {
       showModal('howModal');
     });

@@ -92,7 +92,7 @@ Each `assets/figures/*.svg` wraps its transparent cutout as an embedded base64 P
 
 The transparent header logo is `assets/logo.png`, derived from the supplied `assets/logo.jpg`. It sits in a dark gold-bordered badge so the white Supercell wordmark stays readable over the backdrop.
 
-The five supplied backdrops are used one at a time. The original JPGs are cropped to 16:9, upscaled to **1920 × 1080**, lightly sharpened, and saved as WebP files in `assets/hd/`. The page uses those HD files as a crisp fixed backdrop with no blur. The arena/grid container is a separate solid dark colour — it deliberately does not reuse the backdrop.
+The five supplied backdrops are used one at a time. The original JPGs are cropped to 16:9, upscaled to **1920 × 1080**, lightly sharpened, and saved as WebP files in `assets/hd/`. The page uses those HD files as a crisp fixed backdrop with no blur. The arena/grid container has a frosted-glass finish: a translucent dark tint and backdrop blur let the backdrop show through without hurting readability.
 
 The backdrop advances whenever the grid is reset:
 
@@ -138,15 +138,14 @@ To add a new character:
 - 10 × 4 arena with a guaranteed safe route.
 - Supplied Supercell logo in the header.
 - Five HD 1920 × 1080 backdrops, one active at a time, rotating on every reset.
-- Solid-colour grid container so the arena stays readable against the backdrop.
+- Frosted-glass grid container so the backdrop stays partly visible.
 - Five cutout character figures floating around the board.
 - Coordinate-labelled trap map with player token, trap icons, and type counts.
 - Click-to-trace movement and arrow-key control; diagonal moves rejected.
 - Automatic timer, move count, trap-hit count, and spent-trap state.
 - Optional shortest-safe-route reveal, counted as a hint.
 - Win screen with score, stars, time, moves, and trap hits.
-- Copyable round record with ID, fingerprint, trap count, route length, and status.
-- Print-friendly light tactical map with the character figures hidden.
+- Copyable round record with ID, fingerprint, and status.
 - Responsive layout: floating figures around the board on desktop, character strip on mobile.
 - Settings no longer exist; round number and uniqueness history persist in `localStorage`.
 - No network requests, external fonts, frameworks, or image CDNs.
@@ -155,9 +154,9 @@ To add a new character:
 
 ```
 index.html                  page structure and inline SVG trap artwork
-styles.css                  theme, arena, floating figures, board, responsive and print styles
+styles.css                  theme, glass arena, floating figures, board and responsive styles
 js/core.js                  seeded generation, pathfinding, fingerprints (browser + Node)
-js/app.js                   UI, timer, tracking, storage, modals, print and copy
+js/app.js                   UI, timer, tracking, storage, modals and copy
 assets/                     source art, logo, backdrops (originals + HD), cutouts and SVG figures
 tools/prepare_figures.py    optional background-removal and SVG pipeline
 tools/prepare_backdrops.py  optional HD backdrop crop/upscale pipeline

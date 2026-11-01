@@ -134,11 +134,6 @@
         <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
       </symbol>
 
-      <symbol id="icon-print" viewBox="0 0 24 24">
-        <path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <rect x="7" y="13" width="10" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="2"/>
-      </symbol>
-
       <symbol id="icon-shield" viewBox="0 0 24 24">
         <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
         <path d="M8 12l3 3 5-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -163,10 +158,6 @@
     <div class="top-actions">
       <span class="top-round" id="topRound">10 × 4 · Round 0001</span>
       <button class="btn btn-small btn-ghost" id="howBtn" type="button">How to play</button>
-      <button class="btn btn-small btn-ghost" id="printBtn" type="button">
-        <svg class="icon" aria-hidden="true"><use href="#icon-print"></use></svg>
-        Print map
-      </button>
     </div>
   </header>
 
@@ -232,41 +223,6 @@
           <span><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg> Traps visible to the Watcher only</span>
         </div>
       </section>
-
-      <div class="info-strip">
-        <section class="panel stats-panel">
-          <h3 class="panel-title">Mission intel</h3>
-          <div class="stat-grid">
-            <div class="stat"><span id="trapStat">10</span><small>Traps</small></div>
-            <div class="stat"><span id="safeStat">30</span><small>Safe tiles</small></div>
-            <div class="stat"><span id="routeStat">12</span><small>Shortest route</small></div>
-            <div class="stat"><span id="densityStat">29%</span><small>Danger</small></div>
-          </div>
-          <p class="verify-line"><svg class="icon" aria-hidden="true"><use href="#icon-check"></use></svg> One safe route guaranteed. Start and goal entrances stay clear.</p>
-          <div class="record">
-            <p><span>Round</span><strong id="recordRound">#0001</strong></p>
-            <p><span>Layout fingerprint</span><code id="fingerprint">—</code></p>
-          </div>
-        </section>
-
-        <section class="panel legend-panel">
-          <h3 class="panel-title">Traps on this grid</h3>
-          <ul class="legend-list" id="legendList"></ul>
-        </section>
-
-        <section class="panel notes-panel">
-          <h3 class="panel-title">Watcher's notes</h3>
-          <ul class="notes">
-            <li>Start is <strong>A1</strong> near-left; Goal is <strong>J4</strong> far-right.</li>
-            <li>Call moves one tile at a time: <em>“up one”</em> or <em>“right two, then up one.”</em></li>
-            <li>Click each tile the Runner steps on, or use the arrow keys, to trace their route.</li>
-            <li>Never mark traps on the physical floor. The map is for your eyes only.</li>
-            <li>Stuck? Reveal the safe route. It costs a hint, not a hit.</li>
-            <li>Reset route restarts the attempt and swaps the backdrop. New grid swaps both.</li>
-            <li>The clock starts on the first move and stops when you reach the Goal.</li>
-          </ul>
-        </section>
-      </div>
     </section>
   </main>
 
