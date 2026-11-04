@@ -152,12 +152,10 @@
       <img class="brand-logo" src="assets/logo.png" alt="Supercell">
       <div class="brand-text">
         <span class="brand-name">TrapGrid</span>
-        <span class="brand-sub">Supercell character arena</span>
       </div>
     </div>
     <div class="top-actions">
       <span class="top-round" id="topRound">10 × 4 · Round 0001</span>
-      <button class="btn btn-small btn-ghost" id="howBtn" type="button">How to play</button>
     </div>
   </header>
 
@@ -167,124 +165,41 @@
     </noscript>
 
     <section class="view game-view" id="gameView">
-      <div class="game-head">
-        <div class="game-title-block">
-          <p class="eyebrow" id="roundLabel"><span class="eyebrow-dot"></span><span id="roundText">Round 0001 · The Watcher's Map</span></p>
-          <h1 class="game-title" id="gameTitle">10 × 4 Arena</h1>
-          <p class="game-tagline">The Watcher sees everything. The Runner sees nothing.</p>
-          <p class="grid-id">
-            <span class="grid-id-label">Grid ID</span>
-            <code id="gridId">TG-10x4-0001-00000000</code>
-            <button class="mini-btn" id="copyIdBtn" type="button">
-              <svg class="icon" aria-hidden="true"><use href="#icon-copy"></use></svg>
-              Copy record
-            </button>
-            <span class="verify-badge"><svg class="icon" aria-hidden="true"><use href="#icon-check"></use></svg> Pathfinder verified</span>
-          </p>
+      <div class="map-head">
+        <div class="status" id="statusText" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
         </div>
         <div class="hud" aria-label="Round statistics">
           <div class="hud-box"><span class="hud-value" id="timer">00:00</span><span class="hud-label">Time</span></div>
           <div class="hud-box"><span class="hud-value" id="moveCount">0</span><span class="hud-label">Moves</span></div>
           <div class="hud-box hud-box-hits"><span class="hud-value" id="hitCount">0</span><span class="hud-label">Trap hits</span></div>
         </div>
+        <div class="map-actions">
+          <button class="btn btn-small btn-ghost" id="resetBtn" type="button">Reset route</button>
+          <button class="btn btn-small btn-primary" id="newGridBtn" type="button">New grid</button>
+        </div>
       </div>
 
-      <section class="panel map-panel arena-panel">
-        <div class="map-head">
-          <div class="status" id="statusText" aria-live="polite">
-            <span class="status-dot" aria-hidden="true"></span>
-            <span id="statusMessage">Click a tile to start the clock.</span>
-          </div>
-          <div class="map-actions">
-            <button class="btn btn-small btn-gold" id="routeBtn" type="button">Reveal safe route</button>
-            <button class="btn btn-small btn-ghost" id="resetBtn" type="button">Reset route</button>
-            <button class="btn btn-small btn-primary" id="newGridBtn" type="button">New grid</button>
-          </div>
+      <div class="arena-stage">
+        <div class="figure-rail figure-rail-left" aria-hidden="true">
+          <div class="figure figure-bowler"><img src="assets/figures/bowler.svg" alt=""></div>
+          <div class="figure figure-archer"><img src="assets/figures/archer.svg" alt=""></div>
         </div>
 
-        <div class="arena-stage">
-          <div class="figure-layer" aria-hidden="true">
-            <div class="figure figure-bowler"><img src="assets/figures/bowler.svg" alt=""></div>
-            <div class="figure figure-archer"><img src="assets/figures/archer.svg" alt=""></div>
-            <div class="figure figure-hogrider"><img src="assets/figures/hogrider.svg" alt=""></div>
-            <div class="figure figure-prince"><img src="assets/figures/prince.svg" alt=""></div>
-            <div class="figure figure-knight"><img src="assets/figures/knight.svg" alt=""></div>
-          </div>
-
-          <div class="board-scroll">
-            <div class="board" id="board" tabindex="0" aria-label="10 by 4 trap map. Use the arrow keys or click a neighbouring tile to trace the Runner."></div>
-          </div>
+        <div class="board-scroll">
+          <div class="board" id="board" tabindex="0" aria-label="10 by 4 trap map. Use the arrow keys or click a neighbouring tile to trace the Runner."></div>
         </div>
 
-        <div class="map-foot">
-          <span><svg class="icon" aria-hidden="true"><use href="#icon-start"></use></svg> Start <strong>A1</strong></span>
-          <span><svg class="icon" aria-hidden="true"><use href="#icon-flag"></use></svg> Goal <strong id="goalCoord">J4</strong></span>
-          <span><svg class="icon" aria-hidden="true"><use href="#icon-runner"></use></svg> Runner</span>
-          <span><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg> Traps visible to the Watcher only</span>
+        <div class="figure-rail figure-rail-right" aria-hidden="true">
+          <div class="figure figure-hogrider"><img src="assets/figures/hogrider.svg" alt=""></div>
+          <div class="figure figure-prince"><img src="assets/figures/prince.svg" alt=""></div>
+          <div class="figure figure-knight"><img src="assets/figures/knight.svg" alt=""></div>
         </div>
-      </section>
+      </div>
     </section>
   </main>
 
-  <footer class="site-footer">
-    <p>TrapGrid is a fan-made party game. Character artwork, backdrops, the Supercell logo, and Clash of Clans are property of Supercell. Not affiliated with or endorsed by Supercell.</p>
-    <p class="footer-meta">Every 10 × 4 grid is pathfinder-verified and fingerprint-checked for uniqueness on this device.</p>
-  </footer>
-
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-  <div class="modal" id="howModal" hidden>
-    <div class="modal-backdrop" data-close="howModal"></div>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="howTitle">
-      <button class="modal-x" type="button" data-close="howModal" aria-label="Close">
-        <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
-      </button>
-      <p class="panel-kicker">Field manual</p>
-      <h2 id="howTitle">How to play TrapGrid</h2>
-      <ol class="how-list">
-        <li>
-          <span class="how-num">1</span>
-          <div>
-            <h3>Set the floor</h3>
-            <p>Draw a 10 × 4 grid on the floor. Put Start at the near-left corner (A1) and Goal at the far-right corner (J4). Columns letter left → right; rows number near → far. Do not mark any traps.</p>
-          </div>
-        </li>
-        <li>
-          <span class="how-num">2</span>
-          <div>
-            <h3>Split the roles</h3>
-            <p>The Runner wears a blindfold and stands on Start. The Watcher keeps the screen and is the only person who sees the trap map.</p>
-          </div>
-        </li>
-        <li>
-          <span class="how-num">3</span>
-          <div>
-            <h3>Talk them across</h3>
-            <p>Only forwards, backwards, left or right — no diagonals. The Watcher calls safe moves using directions or coordinates. The Runner moves one tile per call.</p>
-          </div>
-        </li>
-        <li>
-          <span class="how-num">4</span>
-          <div>
-            <h3>Score the run</h3>
-            <p>Step on a trap and the team takes a hit. Reach the Goal tile to clear the grid. The screen tracks time, moves, hits and any route hints used.</p>
-          </div>
-        </li>
-      </ol>
-      <div class="callout">
-        <strong>Safety first.</strong> Keep the floor clear, move at walking pace, and have a spotter beside the Runner. The Watcher can stop the run at any time.
-      </div>
-      <div class="callout callout-gold">
-        <strong>Never impossible.</strong> Each grid is generated, then checked with a four-way pathfinder. At least one trap-free route from Start to Goal always exists. Start and goal entrances are kept clear too.
-      </div>
-      <div class="callout callout-gold">
-        <strong>Never the same twice.</strong> Every round gets a new 160-bit seed and a 128-bit layout fingerprint. The fingerprint is checked against every previous round stored on this device, so a repeat is rejected and regenerated.
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-primary" type="button" data-close="howModal">Got it</button>
-      </div>
-    </div>
-  </div>
 
   <div class="modal" id="winModal" hidden>
     <div class="modal-backdrop" data-close="winModal"></div>

@@ -16,11 +16,6 @@
       blurb: 'A classic hidden explosive. Small, rude, and everywhere.'
     },
     {
-      id: 'spring',
-      name: 'Spring Trap',
-      blurb: 'Flings troops clean off the board.'
-    },
-    {
       id: 'giant',
       name: 'Giant Bomb',
       blurb: 'One huge blast. Very little warning.'
@@ -47,7 +42,7 @@
     }
   ]);
 
-  const TYPE_WEIGHTS = Object.freeze([30, 18, 12, 14, 10, 8, 8]);
+  const TYPE_WEIGHTS = Object.freeze([30, 12, 14, 10, 8, 8]);
   const TYPE_WEIGHT_TOTAL = TYPE_WEIGHTS.reduce(function (sum, weight) {
     return sum + weight;
   }, 0);

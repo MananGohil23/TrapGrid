@@ -5,6 +5,15 @@
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const ARENA = Object.freeze({ rows: 4, cols: 10, density: 0.3, minDetour: 1 });
 
+  const TRAP_IMAGES = {
+    bomb: 'assets/Bomb7.webp',
+    giant: 'assets/Giant_Bomb5.webp',
+    air: 'assets/Air_Bomb7.webp',
+    mine: 'assets/Seeking_Air_Mine3.webp',
+    skeleton: 'assets/SkeletonTrap3_Ground.webp',
+    tornado: 'assets/Tornado_Trap1.webp'
+  };
+
   const STORAGE = {
     round: 'trapgrid.round.v1',
     seen: 'trapgrid.seen.v1',
@@ -16,7 +25,8 @@
     'assets/hd/bg2.webp',
     'assets/hd/bg3.webp',
     'assets/hd/bg4.webp',
-    'assets/hd/bg5.webp'
+    'assets/hd/bg5.webp',
+    'assets/hd/bg6.webp'
   ];
 
   let backgroundIndex = -1;
@@ -36,9 +46,6 @@
     finished: false,
     moves: 0,
     hits: 0,
-    hintsUsed: 0,
-    hintUsed: false,
-    pathRevealed: false,
     triggered: new Set(),
     toastTimer: null,
     lastFocused: null
@@ -57,24 +64,15 @@
 
   const el = {};
   [
-    'roundLabel',
-    'roundText',
-    'gameTitle',
     'topRound',
-    'gridId',
-    'copyIdBtn',
     'timer',
     'moveCount',
     'hitCount',
     'statusText',
     'statusMessage',
-    'routeBtn',
     'resetBtn',
     'newGridBtn',
     'board',
-    'goalCoord',
-    'howBtn',
-    'howModal',
     'winModal',
     'winStars',
     'winSub',
@@ -115,13 +113,6 @@
     writeStorage(STORAGE.seen, values);
   }
 
-  function preloadBackgrounds() {
-    BACKGROUNDS.forEach(function (source) {
-      const image = new Image();
-      image.src = source;
-    });
-  }
-
   function advanceBackground() {
     const stored = Number(readStorage(STORAGE.background, backgroundIndex));
     const current = Number.isFinite(stored) ? Math.floor(stored) : backgroundIndex;
@@ -131,6 +122,9 @@
       '--scene-image',
       'url("' + BACKGROUNDS[backgroundIndex] + '")'
     );
+    const next = (backgroundIndex + 1) % BACKGROUNDS.length;
+    const image = new Image();
+    image.src = BACKGROUNDS[next];
   }
 
   function nextRoundNumber() {
@@ -216,10 +210,6 @@
     el.hitCount.textContent = String(state.hits);
   }
 
-  function updateRouteButton() {
-    el.routeBtn.textContent = state.pathRevealed ? 'Hide safe route' : 'Reveal safe route';
-  }
-
   function resetRoundState() {
     if (state.timerId) {
       window.clearInterval(state.timerId);
@@ -232,9 +222,6 @@
     state.finished = false;
     state.moves = 0;
     state.hits = 0;
-    state.hintsUsed = 0;
-    state.hintUsed = false;
-    state.pathRevealed = false;
     state.triggered.clear();
     if (state.grid) {
       state.current = { ...state.grid.start };
@@ -244,7 +231,7 @@
   function resetRoundVisuals() {
     state.cells.forEach(function (cell) {
       if (cell) {
-        cell.classList.remove('on-path', 'detonated', 'boom');
+        cell.classList.remove('detonated', 'boom');
       }
     });
     if (state.grid && state.token) {
@@ -256,7 +243,6 @@
     }
     updateHud();
     updateTimerDisplay();
-    updateRouteButton();
     setStatus('', READY_MESSAGE);
   }
 
@@ -331,17 +317,12 @@
       return;
     }
 
-    el.roundText.textContent = 'Round ' + padRound(grid.round) + " · The Watcher's Map";
-    el.gameTitle.textContent = grid.cols + ' × ' + grid.rows + ' Arena';
     el.topRound.textContent = grid.cols + ' × ' + grid.rows + ' · Round ' + padRound(grid.round);
-    el.gridId.textContent = grid.gridId;
-    el.goalCoord.textContent = Core.coordOf(grid.rows, grid.goal.r, grid.goal.c);
 
     resetRoundState();
     renderBoard();
     updateHud();
     updateTimerDisplay();
-    updateRouteButton();
     setStatus('', READY_MESSAGE);
     hideModal('winModal');
     document.body.classList.remove('modal-open');
@@ -413,7 +394,12 @@
           button.dataset.trap = trapType.id;
           button.title = coord + ' — ' + trapType.name + ': ' + trapType.blurb;
           button.setAttribute('aria-label', coord + ' — ' + trapType.name + ' trap');
-          button.appendChild(svgUse('trap-' + trapType.id, 'trap-icon'));
+          const image = document.createElement('img');
+          image.className = 'trap-icon';
+          image.src = TRAP_IMAGES[trapType.id];
+          image.alt = '';
+          image.draggable = false;
+          button.appendChild(image);
         } else {
           button.title = coord + ' — safe tile';
           button.setAttribute('aria-label', coord + ' — safe tile');
@@ -592,11 +578,10 @@
         grid.rows * grid.cols * 4 -
         seconds * 2 -
         state.moves * 3 -
-        state.hits * 120 -
-        state.hintsUsed * 90
+        state.hits * 120
     );
     let stars = 1;
-    if (state.hits === 0 && state.hintsUsed === 0) {
+    if (state.hits === 0) {
       stars = 3;
     } else if (state.hits <= 2) {
       stars = 2;
@@ -604,9 +589,7 @@
 
     let subtitle;
     if (stars === 3) {
-      subtitle = 'Flawless. No traps, no hints — the Watcher earns a crown.';
-    } else if (state.hits === 0) {
-      subtitle = 'Clean crossing. The pathfinder helped a little.';
+      subtitle = 'Flawless. No traps triggered — the Watcher earns a crown.';
     } else if (state.hits <= 2) {
       subtitle = 'A few scrapes, but the flag is yours.';
     } else {
@@ -631,11 +614,7 @@
     el.winStats.appendChild(makeWinStat(state.moves, 'Moves'));
     el.winStats.appendChild(makeWinStat(state.hits, 'Trap hits'));
 
-    const hintText =
-      state.hintsUsed > 0
-        ? ' · ' + state.hintsUsed + ' route hint' + (state.hintsUsed === 1 ? '' : 's')
-        : ' · no hints';
-    el.winId.textContent = 'ID ' + grid.gridId + ' · fingerprint ' + grid.fingerprint + hintText;
+    el.winId.textContent = 'ID ' + grid.gridId + ' · fingerprint ' + grid.fingerprint;
     showModal('winModal');
   }
 
@@ -686,51 +665,6 @@
     }
   }
 
-  function toggleRoute() {
-    const grid = state.grid;
-    if (!grid) {
-      return;
-    }
-    if (state.pathRevealed) {
-      grid.path.forEach(function (cell) {
-        const node = state.cells[cell.r * grid.cols + cell.c];
-        if (node) {
-          node.classList.remove('on-path');
-        }
-      });
-      state.pathRevealed = false;
-      updateRouteButton();
-      if (!state.finished) {
-        setStatus('live', 'Safe route hidden. Keep guiding the Runner.');
-      }
-      return;
-    }
-
-    grid.path.forEach(function (cell) {
-      const node = state.cells[cell.r * grid.cols + cell.c];
-      if (node) {
-        node.classList.add('on-path');
-      }
-    });
-    state.pathRevealed = true;
-    if (!state.finished && !state.hintUsed) {
-      state.hintUsed = true;
-      state.hintsUsed = 1;
-    }
-    updateRouteButton();
-    if (!state.finished) {
-      setStatus(
-        'success',
-        'Safe route revealed — ' +
-          (grid.path.length - 1) +
-          ' steps from A1 to ' +
-          Core.coordOf(grid.rows, grid.goal.r, grid.goal.c) +
-          '.'
-      );
-    }
-    toast('Safe route revealed. Hints used: ' + state.hintsUsed + '.', 'success');
-  }
-
   function toast(message, kind, duration) {
     if (!el.toast) {
       return;
@@ -744,59 +678,6 @@
       el.toast.className = 'toast' + (kind ? ' ' + kind : '');
       state.toastTimer = null;
     }, duration || 2800);
-  }
-
-  function copyRecord() {
-    const grid = state.grid;
-    if (!grid) {
-      return;
-    }
-    const text = [
-      'TrapGrid — Round ' + padRound(grid.round),
-      grid.cols + ' × ' + grid.rows + ' arena',
-      'Grid ID: ' + grid.gridId,
-      'Fingerprint: ' + grid.fingerprint,
-      'Status: ' + (state.finished ? 'cleared' : state.timerStarted ? 'in progress' : 'ready')
-    ].join('\n');
-    copyText(text).then(function (ok) {
-      toast(
-        ok ? 'Round record copied to the clipboard.' : 'Could not copy automatically — long-press the Grid ID.',
-        ok ? 'success' : 'danger'
-      );
-    });
-  }
-
-  function copyText(text) {
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      return navigator.clipboard
-        .writeText(text)
-        .then(function () {
-          return true;
-        })
-        .catch(function () {
-          return legacyCopy(text);
-        });
-    }
-    return Promise.resolve(legacyCopy(text));
-  }
-
-  function legacyCopy(text) {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.setAttribute('readonly', 'readonly');
-    area.style.position = 'fixed';
-    area.style.top = '-1000px';
-    area.style.opacity = '0';
-    document.body.appendChild(area);
-    area.select();
-    let ok = false;
-    try {
-      ok = document.execCommand('copy');
-    } catch (error) {
-      ok = false;
-    }
-    area.remove();
-    return ok;
   }
 
   function handleBoardClick(event) {
@@ -863,8 +744,6 @@
     el.board.addEventListener('click', handleBoardClick);
     el.board.addEventListener('keydown', handleBoardKeydown);
 
-    el.routeBtn.addEventListener('click', toggleRoute);
-
     el.resetBtn.addEventListener('click', function () {
       if (!state.grid) {
         return;
@@ -881,11 +760,6 @@
 
     el.newGridBtn.addEventListener('click', function () {
       forgeGrid();
-    });
-
-    el.copyIdBtn.addEventListener('click', copyRecord);
-    el.howBtn.addEventListener('click', function () {
-      showModal('howModal');
     });
 
     el.winNextBtn.addEventListener('click', function () {
@@ -925,7 +799,6 @@
       return;
     }
     bindEvents();
-    preloadBackgrounds();
     forgeGrid({ silent: true });
     updateTimerDisplay();
   }

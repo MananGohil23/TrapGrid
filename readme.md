@@ -4,7 +4,7 @@ A static, two-player blindfold floor game with a Supercell character theme.
 
 One player — the **Watcher** — sees the whole trap map on screen. The other player — the **Runner** — wears a blindfold, stands on a physical 10 × 4 grid drawn on the floor, and moves only on the Watcher's calls. Traps exist only on the screen and in the generator; they are never marked on the floor.
 
-The page opens directly into a generated round. There is no setup screen. **New grid** forges a fresh, unique 10 × 4 arena.
+The page opens directly into a generated round. There is no setup screen. **New grid** forges a fresh, unique 10 × 4 arena. The board auto-sizes to fill the viewport, so the entire grid stays visible without page scrolling.
 
 ## Run it
 
@@ -40,9 +40,9 @@ Serving is recommended because `localStorage` behaves more consistently over `ht
 3. The Watcher calls moves one tile at a time: forwards, backwards, left, or right. No diagonals.
 4. The Watcher can click each tile the Runner steps on, or use the arrow keys, to trace the route. The clock starts on the first move.
 5. Stepping on a trap records a hit and marks it as spent. Reaching J4 clears the round.
-6. **Reveal safe route** shows the shortest safe path as a hint. **Reset route** restarts the attempt on the same map and swaps the backdrop. **New grid** generates a new map and a new backdrop.
+6. **Reset route** restarts the attempt on the same map and swaps the backdrop. **New grid** generates a new map and a new backdrop.
 
-Suggested penalties are up to the group: added time, lost lives, a dare, or a reset. The page records time, moves, trap hits, and hints used.
+Suggested penalties are up to the group: added time, lost lives, a dare, or a reset. The page records time, moves, and trap hits.
 
 ## Feasible by construction
 
@@ -64,7 +64,7 @@ Local history is per browser and per origin. Clearing site data or switching dev
 
 ## Character figures
 
-The floating figures around the board are built from the supplied character images:
+The floating figures flanking the board are built from the supplied character images:
 
 - Archer
 - Bowler
@@ -78,21 +78,24 @@ Asset layout:
 assets/
   archer.jpg, bowler.jpg, hogrider.jpg, knight.jpg, prince.jpg  originals
   logo.jpg, logo.png                                           supplied logo and transparent header version
-  bg1.jpg … bg5.jpg                                            original backdrop sources
-  hd/bg1.webp … hd/bg5.webp                                    1920 × 1080 backdrop files
+  Bomb7.webp … Tornado_Trap1.webp                               actual trap artwork used in the grid
+  hd/bg1.webp … hd/bg6.webp                                    HD backdrop files
   cutouts/                                                       transparent PNG cutouts
   figures/                                                       self-contained SVG figures
 tools/prepare_figures.py                                         cutout + SVG pipeline
-tools/prepare_backdrops.py                                       HD backdrop pipeline
 ```
 
-Each `assets/figures/*.svg` wraps its transparent cutout as an embedded base64 PNG, so the SVG is self-contained and works from `file://`. The page places the SVGs in a floating figure layer above and below the board. CSS handles the gold aura, soft shadow, bobbing animation, and the compact mobile character strip.
+Each `assets/figures/*.svg` wraps its transparent cutout as an embedded base64 PNG, so the SVG is self-contained and works from `file://`. On wide screens the SVGs sit in two large side rails flanking the board; on narrow screens they move into compact rows above it, and on very short viewports they hide so the grid can use the available height. CSS handles the gold aura, soft shadow, and bobbing animation.
+
+## Trap artwork
+
+The grid uses the six supplied WebP trap images: **Bomb**, **Giant Bomb**, **Air Bomb**, **Seeking Air Mine**, **Skeleton Trap**, and **Tornado Trap**. Each trap tile renders its corresponding image directly, and the core trap set matches those six types.
 
 ## Logo and backdrops
 
 The transparent header logo is `assets/logo.png`, derived from the supplied `assets/logo.jpg`. It sits in a dark gold-bordered badge so the white Supercell wordmark stays readable over the backdrop.
 
-The five supplied backdrops are used one at a time. The original JPGs are cropped to 16:9, upscaled to **1920 × 1080**, lightly sharpened, and saved as WebP files in `assets/hd/`. The page uses those HD files as a crisp fixed backdrop with no blur. The arena/grid container has a frosted-glass finish: a translucent dark tint and backdrop blur let the backdrop show through without hurting readability.
+The six supplied HD backdrops in `assets/hd/` are used one at a time as a crisp fixed backdrop with no blur. The grid has no surrounding container; the board floats directly on the backdrop.
 
 The backdrop advances whenever the grid is reset:
 
@@ -100,14 +103,7 @@ The backdrop advances whenever the grid is reset:
 - **Reset route** restarts the current attempt and advances the backdrop.
 - A page load counts as a new round, so it also advances.
 
-Only one backdrop is active at a time. The current index is stored in `localStorage` and all backdrops are preloaded so the switch is immediate. To regenerate the HD set after replacing a source JPG, run:
-
-```powershell
-pip install pillow
-python tools/prepare_backdrops.py
-```
-
-To change the set used by the page, edit the `BACKGROUNDS` array in `js/app.js`; the CSS scene variable updates automatically.
+Only one backdrop is active at a time. The current index is stored in `localStorage` and all backdrops are preloaded so the switch is immediate. To change the set used by the page, edit the `BACKGROUNDS` array in `js/app.js`; the CSS scene variable updates automatically.
 
 ## Rebuilding or adding figures
 
@@ -137,29 +133,27 @@ To add a new character:
 
 - 10 × 4 arena with a guaranteed safe route.
 - Supplied Supercell logo in the header.
-- Five HD 1920 × 1080 backdrops, one active at a time, rotating on every reset.
-- Frosted-glass grid container so the backdrop stays partly visible.
-- Five cutout character figures floating around the board.
-- Coordinate-labelled trap map with player token, trap icons, and type counts.
+- Six HD backdrops, one active at a time, rotating on every reset.
+- No grid container: the board floats directly on the backdrop.
+- Five larger cutout character figures flanking the board on wide screens.
+- Coordinate-labelled trap map with player token and actual trap artwork.
 - Click-to-trace movement and arrow-key control; diagonal moves rejected.
 - Automatic timer, move count, trap-hit count, and spent-trap state.
-- Optional shortest-safe-route reveal, counted as a hint.
 - Win screen with score, stars, time, moves, and trap hits.
-- Copyable round record with ID, fingerprint, and status.
-- Responsive layout: floating figures around the board on desktop, character strip on mobile.
+- Full-viewport, grid-first layout: the board auto-sizes so the entire 10 × 4 grid is visible without scrolling.
+- Responsive layout: compact header and controls; figures move above the board on narrow screens and hide on short screens.
 - Settings no longer exist; round number and uniqueness history persist in `localStorage`.
 - No network requests, external fonts, frameworks, or image CDNs.
 
 ## Project structure
 
 ```
-index.html                  page structure and inline SVG trap artwork
-styles.css                  theme, glass arena, floating figures, board and responsive styles
+index.html                  page structure
+styles.css                  theme, side figures, board and responsive styles
 js/core.js                  seeded generation, pathfinding, fingerprints (browser + Node)
-js/app.js                   UI, timer, tracking, storage, modals and copy
-assets/                     source art, logo, backdrops (originals + HD), cutouts and SVG figures
+js/app.js                   UI, timer, tracking, storage and modals
+assets/                     source art, logo, HD backdrops, trap art, cutouts and SVG figures
 tools/prepare_figures.py    optional background-removal and SVG pipeline
-tools/prepare_backdrops.py  optional HD backdrop crop/upscale pipeline
 tests/core.test.js          feasibility, uniqueness and fixed-arena tests
 readme.md                   this file
 ```
@@ -195,10 +189,10 @@ Node 18+ is required for the built-in test runner. The suite covers:
 The win screen calculates a casual score:
 
 ```
-max(0, 500 + area × 4 − seconds × 2 − moves × 3 − hits × 120 − hints × 90)
+max(0, 500 + area × 4 − seconds × 2 − moves × 3 − hits × 120)
 ```
 
-Three stars require a run with no trap hits and no route hints. Groups can ignore this scoring completely and use their own rules.
+Three stars require a run with no trap hits. Groups can ignore this scoring completely and use their own rules.
 
 ## Notes
 
