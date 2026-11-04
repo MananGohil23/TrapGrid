@@ -83,7 +83,7 @@
     carveAttempts: 120,
     lineNodeCap: 4000000,
     lineAttempts: 600,
-    lineBudgetSpread: 5
+    lineBudgetSpread: 3
   });
 
   function clamp(value, min, max) {
@@ -398,10 +398,16 @@
     [1, -1]
   ]);
 
-  function findLineViolations(traps, rows, cols, maxRun) {
+  function findLineViolations(traps, rows, cols, maxRun, maxDiagonalRun) {
     const violations = [];
+    const diagonalLimit = maxDiagonalRun > 0 ? maxDiagonalRun : 0;
 
     for (let d = 0; d < LINE_DIRECTIONS.length; d += 1) {
+      const diagonal = d >= 2;
+      if (diagonal && diagonalLimit === 0) {
+        continue;
+      }
+      const limit = diagonal ? diagonalLimit : maxRun;
       const dr = LINE_DIRECTIONS[d][0];
       const dc = LINE_DIRECTIONS[d][1];
 
@@ -419,7 +425,7 @@
           while (rr >= 0 && rr < rows && cc >= 0 && cc < cols) {
             const index = rr * cols + cc;
             if (traps[index]) {
-              if (run.length > maxRun) {
+              if (run.length > limit) {
                 violations.push(run);
               }
               run = [];
@@ -429,7 +435,7 @@
             rr += dr;
             cc += dc;
           }
-          if (run.length > maxRun) {
+          if (run.length > limit) {
             violations.push(run);
           }
         }
@@ -441,12 +447,13 @@
 
   const lineSpaceCache = new Map();
 
-  function enumerateLineLayouts(rows, cols, maxRun, budget, nodeCap) {
+  function enumerateLineLayouts(rows, cols, maxRun, maxDiagonalRun, budget, nodeCap) {
     const total = rows * cols;
     const protectedSet = protectedIndexes(rows, cols);
     const byteLen = Math.ceil(total / 8);
     const traps = new Uint8Array(total);
     const minPerCol = rows > maxRun ? Math.ceil((rows - maxRun) / (maxRun + 1)) : 0;
+    const useDiagonals = maxDiagonalRun > 0;
 
     const points = startAndGoal(rows, cols);
     const startIndex = points.start.r * cols + points.start.c;
@@ -546,7 +553,8 @@
           return;
         }
         for (let i = 0; i < trailSize; i += 1) {
-          if (trailing[i] > maxRun) {
+          const limit = i < rows ? maxRun : maxDiagonalRun;
+          if (trailing[i] > limit) {
             return;
           }
         }
@@ -577,11 +585,12 @@
 
       let forcedMask = 0;
       for (let r = 0; r < rows; r += 1) {
-        if (
+        const forced =
           trailing[r] >= maxRun ||
-          trailing[rows + r + column] >= maxRun ||
-          trailing[bBase + r - column] >= maxRun
-        ) {
+          (useDiagonals &&
+            (trailing[rows + r + column] >= maxDiagonalRun ||
+              trailing[bBase + r - column] >= maxDiagonalRun));
+        if (forced) {
           forcedMask |= 1 << r;
         }
       }
@@ -639,8 +648,6 @@
 
         const undoStart = undoTop;
         for (let r = 0; r < rows; r += 1) {
-          const ai = rows + r + column;
-          const bi = bBase + r - column;
           if (rowMask & (1 << r)) {
             if (trailing[r] !== 0) {
               undo[undoTop] = r;
@@ -648,17 +655,21 @@
               undoTop += 2;
               trailing[r] = 0;
             }
-            if (trailing[ai] !== 0) {
-              undo[undoTop] = ai;
-              undo[undoTop + 1] = trailing[ai];
-              undoTop += 2;
-              trailing[ai] = 0;
-            }
-            if (trailing[bi] !== 0) {
-              undo[undoTop] = bi;
-              undo[undoTop + 1] = trailing[bi];
-              undoTop += 2;
-              trailing[bi] = 0;
+            if (useDiagonals) {
+              const ai = rows + r + column;
+              const bi = bBase + r - column;
+              if (trailing[ai] !== 0) {
+                undo[undoTop] = ai;
+                undo[undoTop + 1] = trailing[ai];
+                undoTop += 2;
+                trailing[ai] = 0;
+              }
+              if (trailing[bi] !== 0) {
+                undo[undoTop] = bi;
+                undo[undoTop + 1] = trailing[bi];
+                undoTop += 2;
+                trailing[bi] = 0;
+              }
             }
             traps[r * cols + column] = 1;
           } else {
@@ -666,14 +677,18 @@
             undo[undoTop + 1] = trailing[r];
             undoTop += 2;
             trailing[r] += 1;
-            undo[undoTop] = ai;
-            undo[undoTop + 1] = trailing[ai];
-            undoTop += 2;
-            trailing[ai] += 1;
-            undo[undoTop] = bi;
-            undo[undoTop + 1] = trailing[bi];
-            undoTop += 2;
-            trailing[bi] += 1;
+            if (useDiagonals) {
+              const ai = rows + r + column;
+              const bi = bBase + r - column;
+              undo[undoTop] = ai;
+              undo[undoTop + 1] = trailing[ai];
+              undoTop += 2;
+              trailing[ai] += 1;
+              undo[undoTop] = bi;
+              undo[undoTop + 1] = trailing[bi];
+              undoTop += 2;
+              trailing[bi] += 1;
+            }
           }
         }
 
@@ -701,12 +716,19 @@
     return { count: count, byteLen: byteLen, bytes: bytes, pathLen: pathLen };
   }
 
-  function getLineSpace(rows, cols, maxRun, budget) {
-    const key = rows + 'x' + cols + '|' + maxRun + '|' + budget;
+  function getLineSpace(rows, cols, maxRun, maxDiagonalRun, budget) {
+    const key = rows + 'x' + cols + '|' + maxRun + '|' + maxDiagonalRun + '|' + budget;
     if (lineSpaceCache.has(key)) {
       return lineSpaceCache.get(key);
     }
-    const space = enumerateLineLayouts(rows, cols, maxRun, budget, LIMITS.lineNodeCap);
+    const space = enumerateLineLayouts(
+      rows,
+      cols,
+      maxRun,
+      maxDiagonalRun,
+      budget,
+      LIMITS.lineNodeCap
+    );
     lineSpaceCache.set(key, space);
     return space;
   }
@@ -736,6 +758,7 @@
       attempts: options.attempts,
       carved: Boolean(options.carved),
       maxSafeRun: options.maxSafeRun || 0,
+      maxDiagonalRun: options.maxDiagonalRun || 0,
       unique: options.unique !== false,
       verified: true
     };
@@ -787,6 +810,11 @@
     const maxSafeRun = Number.isFinite(rawRun) && Math.floor(rawRun) >= 1
       ? Math.floor(rawRun)
       : 0;
+    const rawDiagonal = Number(settings.maxDiagonalRun);
+    const maxDiagonalRun =
+      maxSafeRun > 0 && Number.isFinite(rawDiagonal) && Math.floor(rawDiagonal) >= 1
+        ? Math.floor(rawDiagonal)
+        : 0;
     const seed = settings.seed ? String(settings.seed) : randomSeed();
     const seen =
       settings.seen instanceof Set
@@ -827,7 +855,7 @@
       attempts += 1;
       const traps = placeExactTraps(rng, eligibleTiles.slice());
 
-      if (maxSafeRun > 0 && findLineViolations(traps, rows, cols, maxSafeRun).length) {
+      if (maxSafeRun > 0 && findLineViolations(traps, rows, cols, maxSafeRun, maxDiagonalRun).length) {
         return null;
       }
 
@@ -871,7 +899,7 @@
               density: density,
               attempts: attempts,
               carved: false,
-              maxSafeRun: maxSafeRun
+              maxSafeRun: maxSafeRun, maxDiagonalRun: maxDiagonalRun
             });
           }
         }
@@ -899,7 +927,7 @@
         for (let b = 0; b < budgets.length; b += 1) {
           const budget = budgets[b];
 
-          const space = getLineSpace(rows, cols, maxSafeRun, budget);
+          const space = getLineSpace(rows, cols, maxSafeRun, maxDiagonalRun, budget);
           if (!space || space.count === 0) {
             continue;
           }
@@ -945,7 +973,7 @@
               density: density,
               attempts: attempts,
               carved: true,
-              maxSafeRun: maxSafeRun
+              maxSafeRun: maxSafeRun, maxDiagonalRun: maxDiagonalRun
             });
           }
         }
@@ -1004,7 +1032,7 @@
           continue;
         }
 
-        if (maxSafeRun > 0 && findLineViolations(traps, rows, cols, maxSafeRun).length) {
+        if (maxSafeRun > 0 && findLineViolations(traps, rows, cols, maxSafeRun, maxDiagonalRun).length) {
           continue;
         }
 
@@ -1024,7 +1052,7 @@
           density: density,
           attempts: attempts,
           carved: true,
-          maxSafeRun: maxSafeRun
+          maxSafeRun: maxSafeRun, maxDiagonalRun: maxDiagonalRun
         });
       }
     }
@@ -1042,7 +1070,7 @@
       density: density,
       attempts: attempts,
       carved: true,
-      maxSafeRun: maxSafeRun,
+      maxSafeRun: maxSafeRun, maxDiagonalRun: maxDiagonalRun,
       unique: false
     });
   }
@@ -1064,4 +1092,7 @@
     startAndGoal: startAndGoal
   };
 });
+
+
+
 

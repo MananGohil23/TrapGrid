@@ -82,13 +82,18 @@ function assertFeasible(grid, label) {
   assert.equal(Boolean(goalNeighbourB), false, label + ': goal entrance is clear');
 }
 
-function maxStraightSafeRun(grid) {
-  const directions = [
-    [0, 1],
-    [1, 0],
-    [1, 1],
-    [1, -1]
-  ];
+function maxStraightSafeRun(grid, includeDiagonals) {
+  const directions = includeDiagonals
+    ? [
+        [0, 1],
+        [1, 0],
+        [1, 1],
+        [1, -1]
+      ]
+    : [
+        [0, 1],
+        [1, 0]
+      ];
   let worst = 0;
 
   for (const [dr, dc] of directions) {
@@ -120,10 +125,10 @@ function maxStraightSafeRun(grid) {
   return worst;
 }
 
-function assertLineLimited(grid, limit, label) {
+function assertLineLimited(grid, limit, label, includeDiagonals) {
   assert.equal(grid.maxSafeRun, limit, label + ': grid reports the line limit');
   assert.ok(
-    maxStraightSafeRun(grid) <= limit,
+    maxStraightSafeRun(grid, includeDiagonals) <= limit,
     label + ': no straight safe run longer than ' + limit
   );
 }
@@ -302,12 +307,37 @@ test('the fixed 10x4 arena always produces a feasible unique layout', () => {
       grid.trapCount >= expectedTraps - 2 && grid.trapCount <= expectedTraps + 5,
       `arena #${i}: trap count stays near target (got ${grid.trapCount})`
     );
-    assertLineLimited(grid, 3, `arena #${i}`);
+    assertLineLimited(grid, 3, `arena #${i}`, false);
+    assert.equal(grid.maxDiagonalRun, 0, `arena #${i}: diagonals unconstrained by default`);
     assert.equal(seen.has(grid.fingerprint), false, `arena #${i}: unique`);
     seen.add(grid.fingerprint);
   }
 
   assert.equal(seen.size, 250);
+});
+
+test('an explicit diagonal limit also holds on the arena', () => {
+  const seen = new Set();
+
+  for (let i = 0; i < 12; i += 1) {
+    const grid = Core.generate({
+      rows: 4,
+      cols: 10,
+      density: 0.3,
+      minDetour: 1,
+      maxSafeRun: 3,
+      maxDiagonalRun: 3,
+      seed: `strict-diag-${i}`,
+      seen
+    });
+    assertFeasible(grid, `strict-diag #${i}`);
+    assertLineLimited(grid, 3, `strict-diag #${i}`, true);
+    assert.equal(grid.maxDiagonalRun, 3, `strict-diag #${i}: diagonal limit reported`);
+    assert.equal(seen.has(grid.fingerprint), false, `strict-diag #${i}: unique`);
+    seen.add(grid.fingerprint);
+  }
+
+  assert.equal(seen.size, 12);
 });
 
 test('line-limited generation works on other four-row arenas', () => {
