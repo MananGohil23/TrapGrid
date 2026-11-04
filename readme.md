@@ -41,7 +41,7 @@ Serving is recommended because `localStorage` behaves more consistently over `ht
 3. The Watcher calls moves one tile at a time: forwards, backwards, left, or right. No diagonals.
 4. The Watcher can click each tile the Runner steps on, or use the arrow keys, to trace the route. The clock starts on the first move.
 5. Stepping on a trap records a hit and marks it as spent. Reaching J4 clears the round.
-6. **Reset route** restarts the attempt on the same map and swaps the backdrop. **New grid** generates a new map and a new backdrop.
+6. **New grid** generates a new map and a new backdrop.
 
 Suggested penalties are up to the group: added time, lost lives, a dare, or a reset. The page records time, moves, and trap hits.
 
@@ -62,7 +62,7 @@ Suggested penalties are up to the group: added time, lost lives, a dare, or a re
 - Each layout gets a **128-bit fingerprint** derived from the dimensions and every trap position.
 - Fingerprints are stored in `localStorage` and checked before a grid is accepted. A duplicate is rejected and regenerated. Up to 50,000 fingerprints are written per browser.
 - On the line-limited 10 × 4 arena the rule leaves a large, well-spread layout space: about **84 solvable layouts at 11 traps, 1,535 at 12, and 10,352 at 13**. The forge works through them lowest-trap-count first and raises the count as they are consumed.
-- If a size exhausts its unique layout space, the app refuses to serve a repeat. **Reset route** intentionally keeps the current map while swapping the backdrop; **New grid** always creates a new fingerprint.
+- If a size exhausts its unique layout space, the app refuses to serve a repeat. **New grid** always creates a new fingerprint.
 
 Local history is per browser and per origin. Clearing site data or switching devices resets stored history, but the 128-bit fingerprint and 160-bit seed make duplication practically impossible.
 
@@ -101,10 +101,9 @@ The transparent header logo is `assets/logo.png`, derived from the supplied `ass
 
 The six supplied HD backdrops in `assets/hd/` are used one at a time as a crisp fixed backdrop with no blur. The grid has no surrounding container; the board floats directly on the backdrop.
 
-The backdrop advances whenever the grid is reset:
+The backdrop advances whenever a new round is forged:
 
 - **New grid** and **Forge next grid** generate a new round and the next backdrop.
-- **Reset route** restarts the current attempt and advances the backdrop.
 - A page load counts as a new round, so it also advances.
 
 Only one backdrop is active at a time. The current index is stored in `localStorage` and all backdrops are preloaded so the switch is immediate. To change the set used by the page, edit the `BACKGROUNDS` array in `js/app.js`; the CSS scene variable updates automatically.
@@ -137,7 +136,7 @@ To add a new character:
 
 - 10 × 4 arena with a guaranteed, winding safe route — no straight safe run longer than three tiles in any row or column (diagonal limit optional).
 - Supplied Supercell logo in the header.
-- Six HD backdrops, one active at a time, rotating on every reset.
+- Six HD backdrops, one active at a time, rotating on every new round.
 - No grid container: the board floats directly on the backdrop.
 - Five larger cutout character figures flanking the board on wide screens.
 - Coordinate-labelled trap map with player token and actual trap artwork.
@@ -212,3 +211,4 @@ Teams, runs (last 200 per team), and the session are stored in `localStorage` un
 ## Notes
 
 This is a fan-made party game. Character artwork, backdrops, the Supercell logo, and Clash of Clans are property of Supercell. It is not affiliated with or endorsed by Supercell. The visual assets in `assets/` were supplied for this project; the cutouts and SVG wrappers are derived from those supplied images.
+

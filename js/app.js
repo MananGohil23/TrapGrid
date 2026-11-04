@@ -75,7 +75,6 @@
     'hitCount',
     'statusText',
     'statusMessage',
-    'resetBtn',
     'newGridBtn',
     'board',
     'winModal',
@@ -571,29 +570,6 @@
     if (state.grid) {
       state.current = { ...state.grid.start };
     }
-  }
-
-  function resetRoundVisuals() {
-    state.cells.forEach(function (cell) {
-      if (cell) {
-        cell.classList.remove('detonated', 'boom');
-      }
-    });
-    if (state.grid && state.token) {
-      const startCell = state.cells[state.grid.start.r * state.grid.cols + state.grid.start.c];
-      if (startCell) {
-        startCell.appendChild(state.token);
-        state.token.classList.remove('hop');
-      }
-    }
-    updateHud();
-    updateTimerDisplay();
-    setStatus('', READY_MESSAGE);
-  }
-
-  function beginRoundReset() {
-    resetRoundState();
-    resetRoundVisuals();
   }
 
   function forgeGrid(options) {
@@ -1108,20 +1084,6 @@
     el.board.addEventListener('click', handleBoardClick);
     el.board.addEventListener('keydown', handleBoardKeydown);
 
-    el.resetBtn.addEventListener('click', function () {
-      if (!state.grid) {
-        return;
-      }
-      beginRoundReset();
-      advanceBackground();
-      toast('Route reset. Clock cleared.');
-      try {
-        el.board.focus({ preventScroll: true });
-      } catch (error) {
-        el.board.focus();
-      }
-    });
-
     el.newGridBtn.addEventListener('click', function () {
       forgeGrid();
     });
@@ -1191,7 +1153,7 @@
       return;
     }
     bindEvents();
-    if (window.CloudLoader) CloudLoader.hookReset(['resetBtn', 'newGridBtn', 'winNextBtn']);
+    if (window.CloudLoader) CloudLoader.hookReset(['newGridBtn', 'winNextBtn']);
     restoreSession();
     updateTeamButton();
     forgeGrid({ silent: true });
@@ -1200,3 +1162,4 @@
 
   init();
 })();
+
