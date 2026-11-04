@@ -343,11 +343,43 @@
   function assignTrapTypes(traps, rng) {
     const types = new Int8Array(traps.length);
     types.fill(-1);
+
+    const trapIndexes = [];
     for (let i = 0; i < traps.length; i += 1) {
       if (traps[i]) {
-        types[i] = pickTrapType(rng);
+        trapIndexes.push(i);
       }
     }
+    if (trapIndexes.length === 0) {
+      return types;
+    }
+
+    for (let i = trapIndexes.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rng() * (i + 1));
+      const swap = trapIndexes[i];
+      trapIndexes[i] = trapIndexes[j];
+      trapIndexes[j] = swap;
+    }
+
+    const order = [];
+    for (let i = 0; i < TRAP_TYPES.length; i += 1) {
+      order.push(i);
+    }
+    for (let i = order.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rng() * (i + 1));
+      const swap = order[i];
+      order[i] = order[j];
+      order[j] = swap;
+    }
+
+    const guaranteed = Math.min(order.length, trapIndexes.length);
+    for (let i = 0; i < guaranteed; i += 1) {
+      types[trapIndexes[i]] = order[i];
+    }
+    for (let i = guaranteed; i < trapIndexes.length; i += 1) {
+      types[trapIndexes[i]] = pickTrapType(rng);
+    }
+
     return types;
   }
 

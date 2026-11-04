@@ -344,6 +344,48 @@ test('line limit is opt-in and absent by default', () => {
   assertFeasible(grid, 'unconstrained');
 });
 
+test('every grid spreads the trap types as widely as it can', () => {
+  const sizes = [
+    [4, 4],
+    [6, 6],
+    [10, 10]
+  ];
+
+  for (const [rows, cols] of sizes) {
+    for (const difficulty of Object.values(Core.DIFFICULTIES)) {
+      for (let i = 0; i < 6; i += 1) {
+        const grid = Core.generate({
+          rows,
+          cols,
+          density: difficulty.density,
+          minDetour: difficulty.minDetour,
+          seed: `types-${rows}-${cols}-${difficulty.id}-${i}`
+        });
+
+        const present = new Set();
+        for (let index = 0; index < grid.types.length; index += 1) {
+          if (grid.types[index] >= 0) {
+            present.add(grid.types[index]);
+          }
+        }
+
+        const expected = Math.min(Core.TRAP_TYPES.length, grid.trapCount);
+        assert.equal(
+          present.size,
+          expected,
+          `${rows}x${cols} ${difficulty.id} #${i}: ${expected} distinct trap types`
+        );
+
+        if (grid.trapCount >= Core.TRAP_TYPES.length) {
+          for (let type = 0; type < Core.TRAP_TYPES.length; type += 1) {
+            assert.ok(present.has(type), `${rows}x${cols} ${difficulty.id}: missing type ${type}`);
+          }
+        }
+      }
+    }
+  }
+});
+
 test('coordinate helpers are stable', () => {
   assert.equal(Core.colName(0), 'A');
   assert.equal(Core.colName(7), 'H');

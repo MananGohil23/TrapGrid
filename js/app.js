@@ -1191,6 +1191,7 @@
       return;
     }
     bindEvents();
+    if (window.CloudLoader) CloudLoader.hookReset(['resetBtn', 'newGridBtn', 'winNextBtn']);
     restoreSession();
     updateTeamButton();
     forgeGrid({ silent: true });
