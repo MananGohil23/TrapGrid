@@ -160,6 +160,9 @@
   }
 
   function setStatus(kind, message) {
+    if (!el.statusText || !el.statusMessage) {
+      return;
+    }
     el.statusText.className = 'status' + (kind ? ' ' + kind : '');
     el.statusMessage.textContent = message;
   }
