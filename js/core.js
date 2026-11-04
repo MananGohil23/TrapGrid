@@ -80,7 +80,10 @@
     maxDensity: 0.45,
     maxAttemptsPerSeed: 260,
     maxSeedsPerPhase: 8,
-    carveAttempts: 120
+    carveAttempts: 120,
+    lineNodeCap: 4000000,
+    lineAttempts: 600,
+    lineBudgetSpread: 5
   });
 
   function clamp(value, min, max) {
@@ -356,6 +359,325 @@
     return count;
   }
 
+  const LINE_DIRECTIONS = Object.freeze([
+    [0, 1],
+    [1, 0],
+    [1, 1],
+    [1, -1]
+  ]);
+
+  function findLineViolations(traps, rows, cols, maxRun) {
+    const violations = [];
+
+    for (let d = 0; d < LINE_DIRECTIONS.length; d += 1) {
+      const dr = LINE_DIRECTIONS[d][0];
+      const dc = LINE_DIRECTIONS[d][1];
+
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) {
+          const prevR = r - dr;
+          const prevC = c - dc;
+          if (prevR >= 0 && prevR < rows && prevC >= 0 && prevC < cols) {
+            continue;
+          }
+
+          let run = [];
+          let rr = r;
+          let cc = c;
+          while (rr >= 0 && rr < rows && cc >= 0 && cc < cols) {
+            const index = rr * cols + cc;
+            if (traps[index]) {
+              if (run.length > maxRun) {
+                violations.push(run);
+              }
+              run = [];
+            } else {
+              run.push(index);
+            }
+            rr += dr;
+            cc += dc;
+          }
+          if (run.length > maxRun) {
+            violations.push(run);
+          }
+        }
+      }
+    }
+
+    return violations;
+  }
+
+  const lineSpaceCache = new Map();
+
+  function enumerateLineLayouts(rows, cols, maxRun, budget, nodeCap) {
+    const total = rows * cols;
+    const protectedSet = protectedIndexes(rows, cols);
+    const byteLen = Math.ceil(total / 8);
+    const traps = new Uint8Array(total);
+    const minPerCol = rows > maxRun ? Math.ceil((rows - maxRun) / (maxRun + 1)) : 0;
+
+    const points = startAndGoal(rows, cols);
+    const startIndex = points.start.r * cols + points.start.c;
+    const goalIndex = points.goal.r * cols + points.goal.c;
+    const bfsDist = new Int32Array(total);
+    const bfsQueue = new Int32Array(total);
+
+    function routeLength() {
+      if (traps[startIndex] || traps[goalIndex]) {
+        return -1;
+      }
+      bfsDist.fill(-1);
+      let head = 0;
+      let tail = 0;
+      bfsDist[startIndex] = 0;
+      bfsQueue[tail] = startIndex;
+      tail += 1;
+      while (head < tail) {
+        const index = bfsQueue[head];
+        head += 1;
+        if (index === goalIndex) {
+          return bfsDist[index] + 1;
+        }
+        const r = (index / cols) | 0;
+        const c = index - r * cols;
+        for (let d = 0; d < 4; d += 1) {
+          const dr = d === 0 ? -1 : d === 1 ? 1 : 0;
+          const dc = d === 2 ? -1 : d === 3 ? 1 : 0;
+          const rr = r + dr;
+          const cc = c + dc;
+          if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) {
+            continue;
+          }
+          const next = rr * cols + cc;
+          if (bfsDist[next] !== -1 || traps[next]) {
+            continue;
+          }
+          bfsDist[next] = bfsDist[index] + 1;
+          bfsQueue[tail] = next;
+          tail += 1;
+        }
+      }
+      return -1;
+    }
+
+    const bBase = rows + (rows + cols - 1) + (cols - 1);
+    const trailSize = rows + 2 * (rows + cols - 1);
+    const trailing = new Int32Array(trailSize);
+    const undo = new Int32Array(cols * rows * 8 + 16);
+    let undoTop = 0;
+
+    const allowedMaskByCol = new Int32Array(cols);
+    const allowedRowsByCol = [];
+    for (let c = 0; c < cols; c += 1) {
+      const rowsList = [];
+      let mask = 0;
+      for (let r = 0; r < rows; r += 1) {
+        if (!protectedSet.has(r * cols + c)) {
+          rowsList.push(r);
+          mask |= 1 << r;
+        }
+      }
+      allowedRowsByCol.push(rowsList);
+      allowedMaskByCol[c] = mask;
+    }
+
+    let count = 0;
+    let nodes = 0;
+    let overflow = false;
+    let bytes = null;
+    let pathLen = null;
+    let capacity = 0;
+
+    function grow() {
+      capacity = capacity === 0 ? 4096 : capacity * 2;
+      const nextBytes = new Uint8Array(capacity * byteLen);
+      const nextPathLen = new Uint16Array(capacity);
+      if (bytes !== null) {
+        nextBytes.set(bytes);
+        nextPathLen.set(pathLen);
+      }
+      bytes = nextBytes;
+      pathLen = nextPathLen;
+    }
+
+    function rec(column, used) {
+      nodes += 1;
+      if (nodes > nodeCap) {
+        overflow = true;
+        return;
+      }
+      if (used > budget) {
+        return;
+      }
+      if (column === cols) {
+        if (used !== budget) {
+          return;
+        }
+        for (let i = 0; i < trailSize; i += 1) {
+          if (trailing[i] > maxRun) {
+            return;
+          }
+        }
+        const length = routeLength();
+        if (length < 0) {
+          return;
+        }
+        if (count >= capacity) {
+          grow();
+        }
+        const offset = count * byteLen;
+        for (let i = 0; i < total; i += 1) {
+          if (traps[i]) {
+            bytes[offset + (i >> 3)] |= 1 << (i & 7);
+          }
+        }
+        pathLen[count] = length;
+        count += 1;
+        return;
+      }
+      if (used + (cols - column) * minPerCol > budget) {
+        return;
+      }
+
+      const allowedMask = allowedMaskByCol[column];
+      const allowedRows = allowedRowsByCol[column];
+      const n = allowedRows.length;
+
+      let forcedMask = 0;
+      for (let r = 0; r < rows; r += 1) {
+        if (
+          trailing[r] >= maxRun ||
+          trailing[rows + r + column] >= maxRun ||
+          trailing[bBase + r - column] >= maxRun
+        ) {
+          forcedMask |= 1 << r;
+        }
+      }
+      if ((forcedMask & ~allowedMask) !== 0) {
+        return;
+      }
+
+      let forcedIndexMask = 0;
+      for (let i = 0; i < n; i += 1) {
+        if (forcedMask & (1 << allowedRows[i])) {
+          forcedIndexMask |= 1 << i;
+        }
+      }
+
+      const maskLimit = 1 << n;
+      for (let mask = 0; mask < maskLimit; mask += 1) {
+        if (overflow) {
+          return;
+        }
+        if ((mask & forcedIndexMask) !== forcedIndexMask) {
+          continue;
+        }
+
+        let rowMask = 0;
+        let bits = 0;
+        for (let i = 0; i < n; i += 1) {
+          if (mask & (1 << i)) {
+            rowMask |= 1 << allowedRows[i];
+            bits += 1;
+          }
+        }
+        if (used + bits > budget) {
+          continue;
+        }
+        if (used + bits + (cols - 1 - column) * minPerCol > budget) {
+          continue;
+        }
+
+        let run = 0;
+        let okV = true;
+        for (let r = 0; r < rows; r += 1) {
+          if (rowMask & (1 << r)) {
+            run = 0;
+          } else {
+            run += 1;
+            if (run > maxRun) {
+              okV = false;
+              break;
+            }
+          }
+        }
+        if (!okV) {
+          continue;
+        }
+
+        const undoStart = undoTop;
+        for (let r = 0; r < rows; r += 1) {
+          const ai = rows + r + column;
+          const bi = bBase + r - column;
+          if (rowMask & (1 << r)) {
+            if (trailing[r] !== 0) {
+              undo[undoTop] = r;
+              undo[undoTop + 1] = trailing[r];
+              undoTop += 2;
+              trailing[r] = 0;
+            }
+            if (trailing[ai] !== 0) {
+              undo[undoTop] = ai;
+              undo[undoTop + 1] = trailing[ai];
+              undoTop += 2;
+              trailing[ai] = 0;
+            }
+            if (trailing[bi] !== 0) {
+              undo[undoTop] = bi;
+              undo[undoTop + 1] = trailing[bi];
+              undoTop += 2;
+              trailing[bi] = 0;
+            }
+            traps[r * cols + column] = 1;
+          } else {
+            undo[undoTop] = r;
+            undo[undoTop + 1] = trailing[r];
+            undoTop += 2;
+            trailing[r] += 1;
+            undo[undoTop] = ai;
+            undo[undoTop + 1] = trailing[ai];
+            undoTop += 2;
+            trailing[ai] += 1;
+            undo[undoTop] = bi;
+            undo[undoTop + 1] = trailing[bi];
+            undoTop += 2;
+            trailing[bi] += 1;
+          }
+        }
+
+        rec(column + 1, used + bits);
+
+        for (let r = 0; r < rows; r += 1) {
+          if (rowMask & (1 << r)) {
+            traps[r * cols + column] = 0;
+          }
+        }
+        while (undoTop > undoStart) {
+          undoTop -= 2;
+          trailing[undo[undoTop]] = undo[undoTop + 1];
+        }
+      }
+    }
+
+    rec(0, 0);
+    if (overflow) {
+      return null;
+    }
+    if (count === 0) {
+      return { count: 0, byteLen: byteLen, bytes: new Uint8Array(0), pathLen: new Uint16Array(0) };
+    }
+    return { count: count, byteLen: byteLen, bytes: bytes, pathLen: pathLen };
+  }
+
+  function getLineSpace(rows, cols, maxRun, budget) {
+    const key = rows + 'x' + cols + '|' + maxRun + '|' + budget;
+    if (lineSpaceCache.has(key)) {
+      return lineSpaceCache.get(key);
+    }
+    const space = enumerateLineLayouts(rows, cols, maxRun, budget, LIMITS.lineNodeCap);
+    lineSpaceCache.set(key, space);
+    return space;
+  }
   function finalize(options) {
     const rows = options.rows;
     const cols = options.cols;
@@ -381,6 +703,7 @@
       seed: options.seedUsed,
       attempts: options.attempts,
       carved: Boolean(options.carved),
+      maxSafeRun: options.maxSafeRun || 0,
       unique: options.unique !== false,
       verified: true
     };
@@ -428,6 +751,10 @@
       0,
       Math.floor(Number.isFinite(rawDetour) ? rawDetour : 0)
     );
+    const rawRun = Number(settings.maxSafeRun);
+    const maxSafeRun = Number.isFinite(rawRun) && Math.floor(rawRun) >= 1
+      ? Math.floor(rawRun)
+      : 0;
     const seed = settings.seed ? String(settings.seed) : randomSeed();
     const seen =
       settings.seen instanceof Set
@@ -468,6 +795,10 @@
       attempts += 1;
       const traps = placeExactTraps(rng, eligibleTiles.slice());
 
+      if (maxSafeRun > 0 && findLineViolations(traps, rows, cols, maxSafeRun).length) {
+        return null;
+      }
+
       const path = shortestPath(traps, rows, cols, start, goal);
       if (!path) {
         return null;
@@ -507,7 +838,82 @@
               seedUsed: seedUsed,
               density: density,
               attempts: attempts,
-              carved: false
+              carved: false,
+              maxSafeRun: maxSafeRun
+            });
+          }
+        }
+      }
+    }
+
+    if (maxSafeRun > 0) {
+      const budgetDeltas = [0, -1, 1, -2, 2];
+      for (let d = 3; d <= LIMITS.lineBudgetSpread; d += 1) {
+        budgetDeltas.push(d);
+      }
+      const budgets = [];
+      budgetDeltas.forEach(function (delta) {
+        const value = targetTraps + delta;
+        if (value >= 1 && value <= eligibleTiles.length && budgets.indexOf(value) === -1) {
+          budgets.push(value);
+        }
+      });
+
+      const linePhases = minDetour > 0 ? [minDetour, 0] : [0];
+
+      for (let p = 0; p < linePhases.length; p += 1) {
+        const requiredDetour = linePhases[p];
+
+        for (let b = 0; b < budgets.length; b += 1) {
+          const budget = budgets[b];
+
+          const space = getLineSpace(rows, cols, maxSafeRun, budget);
+          if (!space || space.count === 0) {
+            continue;
+          }
+
+          for (let s = 0; s < LIMITS.lineAttempts; s += 1) {
+            attempts += 1;
+            const seedUsed =
+              seed + '|line|' + budget + '|d' + requiredDetour + '|s' + s;
+            const rng = makeRng(seedUsed);
+            const index = Math.floor(rng() * space.count);
+            if (space.pathLen[index] - 1 < manhattan + requiredDetour) {
+              continue;
+            }
+            const offset = index * space.byteLen;
+            const traps = new Uint8Array(total);
+            for (let i = 0; i < total; i += 1) {
+              if (space.bytes[offset + (i >> 3)] & (1 << (i & 7))) {
+                traps[i] = 1;
+              }
+            }
+
+            const path = shortestPath(traps, rows, cols, start, goal);
+            if (!path) {
+              continue;
+            }
+            if (path.length - 1 < manhattan + requiredDetour) {
+              continue;
+            }
+
+            const fingerprint = fingerprintLayout(rows, cols, traps);
+            if (seen.has(fingerprint)) {
+              continue;
+            }
+
+            return finalize({
+              rows: rows,
+              cols: cols,
+              traps: traps,
+              rng: rng,
+              path: path,
+              fingerprint: fingerprint,
+              seedUsed: seedUsed,
+              density: density,
+              attempts: attempts,
+              carved: true,
+              maxSafeRun: maxSafeRun
             });
           }
         }
@@ -566,6 +972,10 @@
           continue;
         }
 
+        if (maxSafeRun > 0 && findLineViolations(traps, rows, cols, maxSafeRun).length) {
+          continue;
+        }
+
         const fingerprint = fingerprintLayout(rows, cols, traps);
         if (seen.has(fingerprint)) {
           continue;
@@ -581,7 +991,8 @@
           seedUsed: seedUsed,
           density: density,
           attempts: attempts,
-          carved: true
+          carved: true,
+          maxSafeRun: maxSafeRun
         });
       }
     }
@@ -599,6 +1010,7 @@
       density: density,
       attempts: attempts,
       carved: true,
+      maxSafeRun: maxSafeRun,
       unique: false
     });
   }
@@ -620,3 +1032,4 @@
     startAndGoal: startAndGoal
   };
 });
+

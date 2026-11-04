@@ -30,7 +30,8 @@ Serving is recommended because `localStorage` behaves more consistently over `ht
 - Start: **A1**, the near-left corner.
 - Goal: **J4**, the far-right corner.
 - Columns letter left → right; rows number from the near side upward.
-- Trap density: **30%** of the 34 trap-eligible tiles, which targets **10 traps** per round.
+- Trap target: **30%** of the 34 trap-eligible tiles (**10 traps** nominally). The straight-line rule is tight on a four-row arena, so the forge uses the smallest trap count that works — **12 to 15 in practice** — and only raises it as lower-count layouts are used up.
+- **Straight-line rule:** no straight run of safe tiles longer than **three**, in any row, column, or diagonal. Routes therefore always turn.
 - Start, Goal, and the two orthogonal entrance tiles around each are always kept clear.
 
 ## How to play
@@ -47,10 +48,12 @@ Suggested penalties are up to the group: added time, lost lives, a dare, or a re
 ## Feasible by construction
 
 - A four-way breadth-first search verifies a trap-free route from A1 to J4.
-- Candidate layouts that block the route are rejected and regenerated.
-- If random retries cannot find a valid layout, a guaranteed fallback first carves a trap-free route, then fills the remaining eligible tiles with the target trap count.
-- The trap target is exact in normal generation. The density is capped at 45% in the core generator.
-- Tests independently run a second breadth-first search over every generated grid, so the generator cannot pass by trusting its own path result.
+- **Straight-line rule:** every generated layout is checked for runs of four or more safe tiles in all four directions (horizontal, vertical, and both diagonals).
+- For the line-limited arena, the core enumerates every line-compliant layout at each candidate trap count and samples one uniformly, so the rule is exact rather than best-effort.
+- The trap count starts at the 10-trap target, then moves within ±2, then steps upward (up to +5) only when a count has no unused layouts left.
+- If the line-limited space is unavailable, a guaranteed fallback first carves a trap-free route, then fills the remaining eligible tiles with the target trap count.
+- The density is capped at 45% in the core generator.
+- Tests independently run a second breadth-first search and an independent straight-line check over every generated grid, so the generator cannot pass by trusting its own path or line results.
 
 ## Never repeats
 
@@ -58,6 +61,7 @@ Suggested penalties are up to the group: added time, lost lives, a dare, or a re
 - A **monotonic round counter** is stored alongside the grid.
 - Each layout gets a **128-bit fingerprint** derived from the dimensions and every trap position.
 - Fingerprints are stored in `localStorage` and checked before a grid is accepted. A duplicate is rejected and regenerated. Up to 50,000 fingerprints are written per browser.
+- On the line-limited 10 × 4 arena the rule leaves a finite, modest layout space: about **4 solvable layouts at 12 traps, 70 at 13, 478 at 14, and 1,778 at 15**. The forge works through them lowest-trap-count first and raises the count as they are consumed.
 - If a size exhausts its unique layout space, the app refuses to serve a repeat. **Reset route** intentionally keeps the current map while swapping the backdrop; **New grid** always creates a new fingerprint.
 
 Local history is per browser and per origin. Clearing site data or switching devices resets stored history, but the 128-bit fingerprint and 160-bit seed make duplication practically impossible.
@@ -131,7 +135,7 @@ To add a new character:
 
 ## Features
 
-- 10 × 4 arena with a guaranteed safe route.
+- 10 × 4 arena with a guaranteed, winding safe route — no straight safe run longer than three tiles in any row, column, or diagonal.
 - Supplied Supercell logo in the header.
 - Six HD backdrops, one active at a time, rotating on every reset.
 - No grid container: the board floats directly on the backdrop.
@@ -140,9 +144,11 @@ To add a new character:
 - Click-to-trace movement and arrow-key control; diagonal moves rejected.
 - Automatic timer, move count, trap-hit count, and spent-trap state.
 - Win screen with score, stars, time, moves, and trap hits.
+- Team login with name and PIN; cleared grids save automatically to the signed-in team.
+- Leaderboard of all teams on the device, ranked by total score.
 - Full-viewport, grid-first layout: the board auto-sizes so the entire 10 × 4 grid is visible without scrolling.
 - Responsive layout: compact header and controls; figures move above the board on narrow screens and hide on short screens.
-- Settings no longer exist; round number and uniqueness history persist in `localStorage`.
+- Settings no longer exist; round number, uniqueness history, teams, scores, and the signed-in session persist in `localStorage`.
 - No network requests, external fonts, frameworks, or image CDNs.
 
 ## Project structure
@@ -167,6 +173,7 @@ node --test tests/core.test.js
 Node 18+ is required for the built-in test runner. The suite covers:
 
 - independent safe-route verification across sizes and difficulties;
+- the straight-line rule (rows, columns, and diagonals) on the arena and other four-row sizes;
 - Start/Goal and entrance safety;
 - exact trap target counts and valid trap types;
 - uniqueness across thousands of generated layouts;
@@ -193,6 +200,14 @@ max(0, 500 + area × 4 − seconds × 2 − moves × 3 − hits × 120)
 ```
 
 Three stars require a run with no trap hits. Groups can ignore this scoring completely and use their own rules.
+
+## Teams, scores, and leaderboard
+
+- **Team login** — the **Team login** button in the header opens a sign-in sheet. A team is a name (2–24 characters) plus a PIN (4–16 characters). **Create team** registers a new team; **Sign in** unlocks an existing one. The signed-in team is remembered in `localStorage`, so reloading the page keeps the session. **Switch team** and **Sign out** live in the same modal.
+- **Scoring** — when a signed-in team clears a grid, the run (score, stars, time, moves, hits, grid ID) is saved to that team automatically. The win screen confirms the save and shows the team's running total. Wins scored while signed out are held briefly; logging in from the win screen claims that run, while resetting or forging a new grid drops it.
+- **Leaderboard** — the **Leaderboard** button ranks every team on the device by total score (best run, then name, as tie-breaks), showing runs, best, and total. The current team's row is highlighted, and rank 1 gets the gold rank.
+
+Teams, runs (last 200 per team), and the session are stored in `localStorage` under `trapgrid.teams.v1` and `trapgrid.session.v1`. The PIN is stored as a salted hash, not in plain text, but this is a local party game on a shared device — treat team data as visible to anyone with access to the browser. Data is per browser and per origin, like the rest of the game's history.
 
 ## Notes
 

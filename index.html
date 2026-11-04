@@ -156,6 +156,8 @@
     </div>
     <div class="top-actions">
       <span class="top-round" id="topRound">10 × 4 · Round 0001</span>
+      <button class="btn btn-small btn-gold" id="teamBtn" type="button">Team login</button>
+      <button class="btn btn-small btn-ghost" id="boardBtn" type="button">Leaderboard</button>
     </div>
   </header>
 
@@ -213,11 +215,66 @@
       <div class="stars" id="winStars" aria-hidden="true"></div>
       <p class="win-sub" id="winSub">The Runner made it through without a scratch.</p>
       <div class="win-stats" id="winStats"></div>
+      <p class="win-team" id="winTeam"></p>
       <p class="win-id" id="winId"></p>
       <div class="modal-actions">
+        <button class="btn btn-gold" id="winLoginBtn" type="button" hidden>Log in to save</button>
         <button class="btn btn-primary" id="winNextBtn" type="button">Forge next grid</button>
         <button class="btn btn-ghost" type="button" data-close="winModal">Inspect map</button>
       </div>
+    </div>
+  </div>
+
+  <div class="modal" id="teamModal" hidden>
+    <div class="modal-backdrop" data-close="teamModal"></div>
+    <div class="modal-card modal-card-team" role="dialog" aria-modal="true" aria-labelledby="teamTitle">
+      <button class="modal-x" type="button" data-close="teamModal" aria-label="Close">
+        <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+      </button>
+      <p class="panel-kicker">Team access</p>
+      <h2 id="teamTitle">Team login</h2>
+
+      <div id="teamSignedOut">
+        <p class="team-sub">Sign in with your team name and PIN to store scores under your team, or create a new team for your duo.</p>
+        <form id="teamForm" novalidate>
+          <div class="field">
+            <label for="teamName">Team name</label>
+            <input id="teamName" type="text" maxlength="24" autocomplete="off" placeholder="e.g. Trap Masters" required>
+          </div>
+          <div class="field">
+            <label for="teamPin">PIN</label>
+            <input id="teamPin" type="password" maxlength="16" autocomplete="off" placeholder="4+ characters" required>
+          </div>
+          <p class="form-note" id="teamMsg" role="status" aria-live="polite"></p>
+          <div class="modal-actions">
+            <button class="btn btn-primary" id="teamSignInBtn" type="submit">Sign in</button>
+            <button class="btn btn-gold" id="teamCreateBtn" type="button">Create team</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="teamSignedIn" hidden>
+        <p class="team-welcome">Signed in as</p>
+        <p class="team-name" id="teamCurrentName"></p>
+        <div class="team-stats" id="teamCurrentStats"></div>
+        <div class="modal-actions">
+          <button class="btn btn-gold" id="teamSwitchBtn" type="button">Switch team</button>
+          <button class="btn btn-ghost" id="teamSignOutBtn" type="button">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="boardModal" hidden>
+    <div class="modal-backdrop" data-close="boardModal"></div>
+    <div class="modal-card modal-card-board" role="dialog" aria-modal="true" aria-labelledby="boardTitle">
+      <button class="modal-x" type="button" data-close="boardModal" aria-label="Close">
+        <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+      </button>
+      <p class="panel-kicker">Hall of traps</p>
+      <h2 id="boardTitle">Leaderboard</h2>
+      <p class="board-sub">Teams ranked by total score across all cleared grids on this device.</p>
+      <div class="board-table" id="boardTable"></div>
     </div>
   </div>
 

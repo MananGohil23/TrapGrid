@@ -82,6 +82,52 @@ function assertFeasible(grid, label) {
   assert.equal(Boolean(goalNeighbourB), false, label + ': goal entrance is clear');
 }
 
+function maxStraightSafeRun(grid) {
+  const directions = [
+    [0, 1],
+    [1, 0],
+    [1, 1],
+    [1, -1]
+  ];
+  let worst = 0;
+
+  for (const [dr, dc] of directions) {
+    for (let r = 0; r < grid.rows; r += 1) {
+      for (let c = 0; c < grid.cols; c += 1) {
+        const prevR = r - dr;
+        const prevC = c - dc;
+        if (prevR >= 0 && prevR < grid.rows && prevC >= 0 && prevC < grid.cols) {
+          continue;
+        }
+        let run = 0;
+        let rr = r;
+        let cc = c;
+        while (rr >= 0 && rr < grid.rows && cc >= 0 && cc < grid.cols) {
+          if (grid.traps[rr * grid.cols + cc]) {
+            worst = Math.max(worst, run);
+            run = 0;
+          } else {
+            run += 1;
+          }
+          rr += dr;
+          cc += dc;
+        }
+        worst = Math.max(worst, run);
+      }
+    }
+  }
+
+  return worst;
+}
+
+function assertLineLimited(grid, limit, label) {
+  assert.equal(grid.maxSafeRun, limit, label + ': grid reports the line limit');
+  assert.ok(
+    maxStraightSafeRun(grid) <= limit,
+    label + ': no straight safe run longer than ' + limit
+  );
+}
+
 test('every generated grid has a verified safe route', () => {
   const sizes = [
     [4, 4],
@@ -245,18 +291,57 @@ test('the fixed 10x4 arena always produces a feasible unique layout', () => {
       cols: 10,
       density: 0.3,
       minDetour: 1,
+      maxSafeRun: 3,
       seed: `arena-${i}`,
       seen
     });
     assertFeasible(grid, `arena #${i}`);
     assert.equal(grid.rows, 4);
     assert.equal(grid.cols, 10);
-    assert.equal(grid.trapCount, expectedTraps, `arena #${i}: exact trap count`);
+    assert.ok(
+      grid.trapCount >= expectedTraps - 2 && grid.trapCount <= expectedTraps + 5,
+      `arena #${i}: trap count stays near target (got ${grid.trapCount})`
+    );
+    assertLineLimited(grid, 3, `arena #${i}`);
     assert.equal(seen.has(grid.fingerprint), false, `arena #${i}: unique`);
     seen.add(grid.fingerprint);
   }
 
   assert.equal(seen.size, 250);
+});
+
+test('line-limited generation works on other four-row arenas', () => {
+  const seen = new Set();
+
+  for (let i = 0; i < 40; i += 1) {
+    const grid = Core.generate({
+      rows: 4,
+      cols: 12,
+      density: 0.3,
+      minDetour: 1,
+      maxSafeRun: 3,
+      seed: `wide-${i}`,
+      seen
+    });
+    assertFeasible(grid, `wide #${i}`);
+    assertLineLimited(grid, 3, `wide #${i}`);
+    assert.equal(seen.has(grid.fingerprint), false, `wide #${i}: unique`);
+    seen.add(grid.fingerprint);
+  }
+
+  assert.equal(seen.size, 40);
+});
+
+test('line limit is opt-in and absent by default', () => {
+  const grid = Core.generate({
+    rows: 8,
+    cols: 8,
+    density: Core.DIFFICULTIES.normal.density,
+    minDetour: Core.DIFFICULTIES.normal.minDetour,
+    seed: 'no-line-limit'
+  });
+  assert.equal(grid.maxSafeRun, 0);
+  assertFeasible(grid, 'unconstrained');
 });
 
 test('coordinate helpers are stable', () => {
