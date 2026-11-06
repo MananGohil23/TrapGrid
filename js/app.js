@@ -3,7 +3,7 @@
 
   const Core = window.TrapGridCore;
   const SVG_NS = 'http://www.w3.org/2000/svg';
-  const ARENA = Object.freeze({ rows: 4, cols: 10, density: 0.3, minDetour: 1, maxSafeRun: 3 });
+  const ARENA = Object.freeze({ rows: 4, cols: 10, density: 0.43, minDetour: 3, maxSafeRun: 3 });
 
   const TRAP_IMAGES = {
     bomb: 'assets/Bomb7.webp',
@@ -17,9 +17,7 @@
   const STORAGE = {
     round: 'trapgrid.round.v1',
     seen: 'trapgrid.seen.v1',
-    background: 'trapgrid.background.v1',
-    teams: 'trapgrid.teams.v1',
-    session: 'trapgrid.session.v1'
+    background: 'trapgrid.background.v1'
   };
 
   const BACKGROUNDS = [
@@ -51,8 +49,6 @@
     triggered: new Set(),
     toastTimer: null,
     lastFocused: null,
-    teamKey: null,
-    pendingRun: null,
     lastResult: null
   };
 
@@ -83,25 +79,7 @@
     'winStats',
     'winId',
     'winNextBtn',
-    'toast',
-    'teamBtn',
-    'boardBtn',
-    'teamModal',
-    'teamSignedOut',
-    'teamSignedIn',
-    'teamForm',
-    'teamName',
-    'teamPin',
-    'teamMsg',
-    'teamCreateBtn',
-    'teamCurrentName',
-    'teamCurrentStats',
-    'teamSwitchBtn',
-    'teamSignOutBtn',
-    'boardModal',
-    'boardTable',
-    'winTeam',
-    'winLoginBtn'
+    'toast'
   ].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
@@ -135,93 +113,6 @@
     writeStorage(STORAGE.seen, values);
   }
 
-  function hashPin(key, pin) {
-    const value = 'trapgrid:' + key + ':' + pin;
-    let h1 = 0xdeadbeef ^ value.length;
-    let h2 = 0x41c6ce57 ^ value.length;
-    for (let i = 0; i < value.length; i += 1) {
-      const ch = value.charCodeAt(i);
-      h1 = Math.imul(h1 ^ ch, 2654435761);
-      h2 = Math.imul(h2 ^ ch, 1597334677);
-    }
-    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
-  }
-
-  function loadTeams() {
-    const stored = readStorage(STORAGE.teams, {});
-    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
-      return {};
-    }
-    return stored;
-  }
-
-  function saveTeams(teams) {
-    writeStorage(STORAGE.teams, teams);
-  }
-
-  function currentTeam() {
-    if (!state.teamKey) {
-      return null;
-    }
-    return loadTeams()[state.teamKey] || null;
-  }
-
-  function restoreSession() {
-    const key = readStorage(STORAGE.session, null);
-    if (typeof key === 'string' && loadTeams()[key]) {
-      state.teamKey = key;
-    } else {
-      state.teamKey = null;
-      writeStorage(STORAGE.session, null);
-    }
-  }
-
-  function teamStats(team) {
-    const runs = Array.isArray(team.runs) ? team.runs : [];
-    let total = 0;
-    let best = 0;
-    let bestTime = null;
-    let flawless = 0;
-    runs.forEach(function (run) {
-      const score = Number(run.score);
-      const seconds = Number(run.seconds);
-      if (Number.isFinite(score)) {
-        total += Math.max(0, Math.floor(score));
-        if (score > best) {
-          best = Math.floor(score);
-        }
-      }
-      if (Number.isFinite(seconds) && (bestTime === null || seconds < bestTime)) {
-        bestTime = Math.floor(seconds);
-      }
-      if (run.stars === 3) {
-        flawless += 1;
-      }
-    });
-    return { runs: runs.length, total: total, best: best, bestTime: bestTime, flawless: flawless };
-  }
-
-  function recordRun(key, run) {
-    const teams = loadTeams();
-    const team = teams[key];
-    if (!team) {
-      return false;
-    }
-    if (!Array.isArray(team.runs)) {
-      team.runs = [];
-    }
-    team.runs.push(run);
-    if (team.runs.length > 200) {
-      team.runs = team.runs.slice(-200);
-    }
-    team.updated = Date.now();
-    teams[key] = team;
-    saveTeams(teams);
-    return true;
-  }
-
   function computeScore(grid, seconds, moves, hits) {
     const score = Math.max(
       0,
@@ -234,222 +125,6 @@
       stars = 2;
     }
     return { score: score, stars: stars };
-  }
-
-  function updateTeamButton() {
-    const team = currentTeam();
-    if (team) {
-      el.teamBtn.textContent = team.name;
-      el.teamBtn.classList.add('btn-team-on');
-      el.teamBtn.title = 'Signed in as ' + team.name + '. Click to manage.';
-    } else {
-      el.teamBtn.textContent = 'Team login';
-      el.teamBtn.classList.remove('btn-team-on');
-      el.teamBtn.title = 'Sign in or create a team';
-    }
-  }
-
-  function setTeamMsg(message, kind) {
-    el.teamMsg.textContent = message || '';
-    el.teamMsg.className = 'form-note' + (kind ? ' ' + kind : '');
-  }
-
-  function renderTeamModal() {
-    const team = currentTeam();
-    if (team) {
-      el.teamSignedOut.hidden = true;
-      el.teamSignedIn.hidden = false;
-      el.teamCurrentName.textContent = team.name;
-      const stats = teamStats(team);
-      el.teamCurrentStats.innerHTML = '';
-      el.teamCurrentStats.appendChild(makeWinStat(stats.total, 'Total score'));
-      el.teamCurrentStats.appendChild(makeWinStat(stats.best, 'Best run'));
-      el.teamCurrentStats.appendChild(makeWinStat(stats.runs, 'Grids cleared'));
-      el.teamCurrentStats.appendChild(makeWinStat(stats.flawless, 'Flawless'));
-    } else {
-      el.teamSignedIn.hidden = true;
-      el.teamSignedOut.hidden = false;
-    }
-    setTeamMsg('');
-  }
-
-  function openTeamModal() {
-    renderTeamModal();
-    showModal('teamModal');
-    if (!el.teamSignedOut.hidden) {
-      try {
-        el.teamName.focus({ preventScroll: true });
-      } catch (error) {
-        el.teamName.focus();
-      }
-    }
-  }
-
-  function validateTeamInput(name, pin) {
-    if (name.length < 2 || name.length > 24) {
-      return 'Team name needs 2 to 24 characters.';
-    }
-    if (pin.length < 4 || pin.length > 16) {
-      return 'PIN needs 4 to 16 characters.';
-    }
-    return null;
-  }
-
-  function activateTeam(key, message) {
-    state.teamKey = key;
-    writeStorage(STORAGE.session, key);
-    el.teamName.value = '';
-    el.teamPin.value = '';
-    updateTeamButton();
-    renderTeamModal();
-    let note = message;
-    if (state.pendingRun) {
-      const run = state.pendingRun;
-      state.pendingRun = null;
-      if (recordRun(key, run)) {
-        note = message + ' Last run saved: ' + run.score + ' pts.';
-        updateWinTeamNote();
-      }
-    }
-    setTeamMsg(note, 'success');
-    toast(note, 'success');
-  }
-
-  function submitTeamSignIn(event) {
-    event.preventDefault();
-    const name = el.teamName.value.trim();
-    const pin = el.teamPin.value;
-    const error = validateTeamInput(name, pin);
-    if (error) {
-      setTeamMsg(error, 'danger');
-      return;
-    }
-    const key = name.toLowerCase();
-    const team = loadTeams()[key];
-    if (!team) {
-      setTeamMsg('No team named "' + name + '" on this device. Create it instead.', 'danger');
-      return;
-    }
-    if (team.pinHash !== hashPin(key, pin)) {
-      setTeamMsg('Wrong PIN for ' + team.name + '.', 'danger');
-      return;
-    }
-    activateTeam(key, 'Welcome back, ' + team.name + '!');
-  }
-
-  function submitTeamCreate() {
-    const name = el.teamName.value.trim();
-    const pin = el.teamPin.value;
-    const error = validateTeamInput(name, pin);
-    if (error) {
-      setTeamMsg(error, 'danger');
-      return;
-    }
-    const key = name.toLowerCase();
-    const teams = loadTeams();
-    if (teams[key]) {
-      setTeamMsg('Team ' + teams[key].name + ' already exists. Sign in instead.', 'danger');
-      return;
-    }
-    teams[key] = { name: name, pinHash: hashPin(key, pin), created: Date.now(), runs: [] };
-    saveTeams(teams);
-    activateTeam(key, 'Team ' + name + ' created!');
-  }
-
-  function signOutTeam() {
-    const team = currentTeam();
-    state.teamKey = null;
-    writeStorage(STORAGE.session, null);
-    updateTeamButton();
-    renderTeamModal();
-    toast('Signed out' + (team ? ' of ' + team.name : '') + '.');
-  }
-
-  function makeBoardCell(text, className) {
-    const cell = document.createElement('span');
-    cell.className = className ? 'board-cell ' + className : 'board-cell';
-    cell.textContent = text;
-    return cell;
-  }
-
-  function renderLeaderboard() {
-    const teams = loadTeams();
-    const rows = Object.keys(teams).map(function (key) {
-      return { key: key, team: teams[key], stats: teamStats(teams[key]) };
-    });
-    rows.sort(function (a, b) {
-      if (b.stats.total !== a.stats.total) {
-        return b.stats.total - a.stats.total;
-      }
-      if (b.stats.best !== a.stats.best) {
-        return b.stats.best - a.stats.best;
-      }
-      return a.team.name.localeCompare(b.team.name);
-    });
-
-    el.boardTable.innerHTML = '';
-
-    if (!rows.length) {
-      const empty = document.createElement('p');
-      empty.className = 'board-empty';
-      empty.textContent = 'No teams yet. Create a team and clear a grid to appear here.';
-      el.boardTable.appendChild(empty);
-      return;
-    }
-
-    const head = document.createElement('div');
-    head.className = 'board-row board-head';
-    head.appendChild(makeBoardCell('#', 'bc-rank'));
-    head.appendChild(makeBoardCell('Team', 'bc-team'));
-    head.appendChild(makeBoardCell('Runs', 'bc-runs'));
-    head.appendChild(makeBoardCell('Best', 'bc-best'));
-    head.appendChild(makeBoardCell('Total', 'bc-total'));
-    el.boardTable.appendChild(head);
-
-    rows.forEach(function (row, index) {
-      const line = document.createElement('div');
-      line.className = 'board-row';
-      if (row.key === state.teamKey) {
-        line.classList.add('me');
-      }
-      if (index === 0) {
-        line.classList.add('first');
-      }
-      line.appendChild(makeBoardCell(String(index + 1), 'bc-rank'));
-      line.appendChild(makeBoardCell(row.team.name, 'bc-team'));
-      line.appendChild(makeBoardStat(row.stats.runs, 'bc-runs'));
-      line.appendChild(makeBoardStat(row.stats.best, 'bc-best'));
-      line.appendChild(makeBoardStat(row.stats.total, 'bc-total'));
-      el.boardTable.appendChild(line);
-    });
-  }
-
-  function makeBoardStat(value, className) {
-    return makeBoardCell(value === 0 || value === null ? '—' : String(value), className);
-  }
-
-  function updateWinTeamNote() {
-    if (!state.lastResult || !el.winTeam) {
-      return;
-    }
-    const team = currentTeam();
-    if (team) {
-      const stats = teamStats(team);
-      el.winTeam.textContent =
-        'Saved to team ' +
-        team.name +
-        ' — total ' +
-        stats.total +
-        ' pts across ' +
-        stats.runs +
-        ' cleared grid' +
-        (stats.runs === 1 ? '' : 's') +
-        '.';
-      el.winLoginBtn.hidden = true;
-    } else {
-      el.winTeam.textContent = 'No team signed in — this score is not stored.';
-      el.winLoginBtn.hidden = false;
-    }
   }
 
   function advanceBackground() {
@@ -566,7 +241,6 @@
     state.hits = 0;
     state.triggered.clear();
     state.lastResult = null;
-    state.pendingRun = null;
     if (state.grid) {
       state.current = { ...state.grid.start };
     }
@@ -892,20 +566,6 @@
         moves: state.moves,
         hits: state.hits
       };
-      const run = {
-        score: outcome.score,
-        stars: outcome.stars,
-        seconds: seconds,
-        moves: state.moves,
-        hits: state.hits,
-        gridId: state.grid.gridId,
-        at: Date.now()
-      };
-      if (state.teamKey && recordRun(state.teamKey, run)) {
-        state.pendingRun = null;
-      } else {
-        state.pendingRun = run;
-      }
     }
 
     window.setTimeout(function () {
@@ -954,7 +614,6 @@
     el.winStats.appendChild(makeWinStat(state.hits, 'Trap hits'));
 
     el.winId.textContent = 'ID ' + grid.gridId + ' · fingerprint ' + grid.fingerprint;
-    updateWinTeamNote();
     showModal('winModal');
   }
 
@@ -1093,34 +752,6 @@
       forgeGrid();
     });
 
-    el.teamBtn.addEventListener('click', openTeamModal);
-
-    el.boardBtn.addEventListener('click', function () {
-      renderLeaderboard();
-      showModal('boardModal');
-    });
-
-    el.teamForm.addEventListener('submit', submitTeamSignIn);
-
-    el.teamCreateBtn.addEventListener('click', submitTeamCreate);
-
-    el.teamSwitchBtn.addEventListener('click', function () {
-      el.teamSignedIn.hidden = true;
-      el.teamSignedOut.hidden = false;
-      setTeamMsg('Sign in as another team. You stay signed in until the new team is confirmed.');
-      try {
-        el.teamName.focus({ preventScroll: true });
-      } catch (error) {
-        el.teamName.focus();
-      }
-    });
-
-    el.teamSignOutBtn.addEventListener('click', signOutTeam);
-
-    el.winLoginBtn.addEventListener('click', function () {
-      openTeamModal();
-    });
-
     document.querySelectorAll('[data-close]').forEach(function (trigger) {
       trigger.addEventListener('click', function () {
         hideModal(trigger.dataset.close);
@@ -1154,8 +785,6 @@
     }
     bindEvents();
     if (window.CloudLoader) CloudLoader.hookReset(['newGridBtn', 'winNextBtn']);
-    restoreSession();
-    updateTeamButton();
     forgeGrid({ silent: true });
     updateTimerDisplay();
   }

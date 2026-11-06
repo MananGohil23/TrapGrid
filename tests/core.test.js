@@ -72,14 +72,32 @@ function assertFeasible(grid, label) {
   assert.ok(grid.actualDensity > 0 && grid.actualDensity < 0.5, label + ': density is playable');
   assert.match(grid.fingerprint, /^[0-9a-f]{32}$/, label + ': fingerprint is 128-bit hex');
 
-  const startNeighbourA = grid.traps[(grid.start.r - 1) * grid.cols + grid.start.c];
-  const startNeighbourB = grid.traps[grid.start.r * grid.cols + grid.start.c + 1];
-  const goalNeighbourA = grid.traps[(grid.goal.r + 1) * grid.cols + grid.goal.c];
-  const goalNeighbourB = grid.traps[grid.goal.r * grid.cols + grid.goal.c - 1];
-  assert.equal(Boolean(startNeighbourA), false, label + ': start entrance is clear');
-  assert.equal(Boolean(startNeighbourB), false, label + ': start entrance is clear');
-  assert.equal(Boolean(goalNeighbourA), false, label + ': goal entrance is clear');
-  assert.equal(Boolean(goalNeighbourB), false, label + ': goal entrance is clear');
+  const neighbours = [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1]
+  ];
+  for (const [dr, dc] of neighbours) {
+    const startRow = grid.start.r + dr;
+    const startCol = grid.start.c + dc;
+    if (startRow >= 0 && startRow < grid.rows && startCol >= 0 && startCol < grid.cols) {
+      assert.equal(
+        Boolean(grid.traps[startRow * grid.cols + startCol]),
+        false,
+        label + ': start entrance is clear'
+      );
+    }
+    const goalRow = grid.goal.r + dr;
+    const goalCol = grid.goal.c + dc;
+    if (goalRow >= 0 && goalRow < grid.rows && goalCol >= 0 && goalCol < grid.cols) {
+      assert.equal(
+        Boolean(grid.traps[goalRow * grid.cols + goalCol]),
+        false,
+        label + ': goal entrance is clear'
+      );
+    }
+  }
 }
 
 function maxStraightSafeRun(grid, includeDiagonals) {
@@ -170,7 +188,6 @@ test('trap estimate matches normal generated layout counts', () => {
     [10, 10]
   ]) {
     for (const difficulty of Object.values(Core.DIFFICULTIES)) {
-      const estimate = Core.estimateTraps(rows, cols, difficulty.density);
       let expectedCount = 0;
       for (let i = 0; i < 8; i += 1) {
         const grid = Core.generate({
@@ -182,6 +199,13 @@ test('trap estimate matches normal generated layout counts', () => {
         });
         if (!grid.carved) {
           expectedCount += 1;
+          const estimate = Core.estimateTraps(
+            rows,
+            cols,
+            difficulty.density,
+            grid.start,
+            grid.goal
+          );
           assert.equal(
             grid.trapCount,
             estimate,
@@ -288,14 +312,14 @@ test('density and dimensions are clamped to safe limits', () => {
 
 test('the fixed 10x4 arena always produces a feasible unique layout', () => {
   const seen = new Set();
-  const expectedTraps = Core.estimateTraps(4, 10, 0.3);
+  const expectedTraps = Core.estimateTraps(4, 10, 0.38);
 
   for (let i = 0; i < 250; i += 1) {
     const grid = Core.generate({
       rows: 4,
       cols: 10,
-      density: 0.3,
-      minDetour: 1,
+      density: 0.38,
+      minDetour: 3,
       maxSafeRun: 3,
       seed: `arena-${i}`,
       seen
@@ -304,8 +328,16 @@ test('the fixed 10x4 arena always produces a feasible unique layout', () => {
     assert.equal(grid.rows, 4);
     assert.equal(grid.cols, 10);
     assert.ok(
-      grid.trapCount >= expectedTraps - 2 && grid.trapCount <= expectedTraps + 5,
+      grid.trapCount >= expectedTraps - 2 && grid.trapCount <= expectedTraps + 3,
       `arena #${i}: trap count stays near target (got ${grid.trapCount})`
+    );
+    const minMoves =
+      Math.abs(grid.start.r - grid.goal.r) +
+      Math.abs(grid.start.c - grid.goal.c) +
+      3;
+    assert.ok(
+      grid.path.length - 1 >= minMoves,
+      `arena #${i}: shortest route is long and turny (got ${grid.path.length - 1})`
     );
     assertLineLimited(grid, 3, `arena #${i}`, false);
     assert.equal(grid.maxDiagonalRun, 0, `arena #${i}: diagonals unconstrained by default`);
@@ -414,6 +446,37 @@ test('every grid spreads the trap types as widely as it can', () => {
       }
     }
   }
+});
+
+test('start and goal stay in the outer columns while their rows vary', () => {
+  const starts = new Set();
+  const goals = new Set();
+
+  for (let i = 0; i < 40; i += 1) {
+    const grid = Core.generate({
+      rows: 8,
+      cols: 8,
+      density: Core.DIFFICULTIES.normal.density,
+      minDetour: Core.DIFFICULTIES.normal.minDetour,
+      seed: `vary-${i}`
+    });
+
+    assert.equal(grid.start.c, 0, `vary #${i}: start is in the first column`);
+    assert.equal(grid.goal.c, grid.cols - 1, `vary #${i}: goal is in the last column`);
+    assertFeasible(grid, `vary #${i}`);
+    starts.add(grid.start.r);
+    goals.add(grid.goal.r);
+  }
+
+  assert.ok(starts.size > 1, 'start row varies between grids');
+  assert.ok(goals.size > 1, 'goal row varies between grids');
+});
+
+test('fingerprints distinguish different start and goal rows', () => {
+  const traps = new Uint8Array(64);
+  const first = Core.fingerprintLayout(8, 8, traps, { r: 7, c: 0 }, { r: 0, c: 7 });
+  const second = Core.fingerprintLayout(8, 8, traps, { r: 3, c: 0 }, { r: 5, c: 7 });
+  assert.notEqual(first, second);
 });
 
 test('coordinate helpers are stable', () => {

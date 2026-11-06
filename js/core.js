@@ -81,7 +81,7 @@
     maxAttemptsPerSeed: 260,
     maxSeedsPerPhase: 8,
     carveAttempts: 120,
-    lineNodeCap: 4000000,
+    lineNodeCap: 12000000,
     lineAttempts: 600,
     lineBudgetSpread: 3
   });
@@ -193,15 +193,36 @@
     return colName(col) + String(rows - row);
   }
 
-  function startAndGoal(rows, cols) {
+  function startAndGoal(rows, cols, rng) {
+    if (typeof rng === 'function') {
+      return {
+        start: { r: clamp(Math.floor(rng() * rows), 0, rows - 1), c: 0 },
+        goal: { r: clamp(Math.floor(rng() * rows), 0, rows - 1), c: cols - 1 }
+      };
+    }
     return {
       start: { r: rows - 1, c: 0 },
       goal: { r: 0, c: cols - 1 }
     };
   }
 
-  function protectedIndexes(rows, cols) {
-    const points = startAndGoal(rows, cols);
+  function resolvePoints(rows, cols, start, goal) {
+    if (
+      start &&
+      goal &&
+      Number.isFinite(start.r) &&
+      Number.isFinite(goal.r)
+    ) {
+      return {
+        start: { r: clamp(Math.floor(start.r), 0, rows - 1), c: 0 },
+        goal: { r: clamp(Math.floor(goal.r), 0, rows - 1), c: cols - 1 }
+      };
+    }
+    return startAndGoal(rows, cols);
+  }
+
+  function protectedIndexes(rows, cols, start, goal) {
+    const points = resolvePoints(rows, cols, start, goal);
     const protectedSet = new Set();
 
     function add(r, c) {
@@ -212,25 +233,27 @@
 
     add(points.start.r, points.start.c);
     add(points.start.r - 1, points.start.c);
+    add(points.start.r + 1, points.start.c);
     add(points.start.r, points.start.c + 1);
     add(points.goal.r, points.goal.c);
+    add(points.goal.r - 1, points.goal.c);
     add(points.goal.r + 1, points.goal.c);
     add(points.goal.r, points.goal.c - 1);
 
     return protectedSet;
   }
 
-  function freeTileCount(rows, cols) {
+  function freeTileCount(rows, cols, start, goal) {
     const safeRows = clamp(toInt(rows, 8), LIMITS.minRows, LIMITS.maxRows);
     const safeCols = clamp(toInt(cols, 8), LIMITS.minCols, LIMITS.maxCols);
-    return safeRows * safeCols - protectedIndexes(safeRows, safeCols).size;
+    return safeRows * safeCols - protectedIndexes(safeRows, safeCols, start, goal).size;
   }
 
-  function estimateTraps(rows, cols, density) {
+  function estimateTraps(rows, cols, density, start, goal) {
     const safeRows = clamp(toInt(rows, 8), LIMITS.minRows, LIMITS.maxRows);
     const safeCols = clamp(toInt(cols, 8), LIMITS.minCols, LIMITS.maxCols);
     const safeDensity = clamp(Number(density) || 0.27, LIMITS.minDensity, LIMITS.maxDensity);
-    const available = safeRows * safeCols - protectedIndexes(safeRows, safeCols).size;
+    const available = safeRows * safeCols - protectedIndexes(safeRows, safeCols, start, goal).size;
     return Math.max(0, Math.round(available * safeDensity));
   }
 
@@ -321,12 +344,27 @@
     return path;
   }
 
-  function fingerprintLayout(rows, cols, traps) {
+  function fingerprintLayout(rows, cols, traps, start, goal) {
+    const points = resolvePoints(rows, cols, start, goal);
     let bits = '';
     for (let i = 0; i < traps.length; i += 1) {
       bits += traps[i] ? '1' : '0';
     }
-    return hash128(rows + 'x' + cols + '|' + bits);
+    return hash128(
+      rows +
+        'x' +
+        cols +
+        '|' +
+        points.start.r +
+        ',' +
+        points.start.c +
+        '|' +
+        points.goal.r +
+        ',' +
+        points.goal.c +
+        '|' +
+        bits
+    );
   }
 
   function pickTrapType(rng) {
@@ -447,15 +485,15 @@
 
   const lineSpaceCache = new Map();
 
-  function enumerateLineLayouts(rows, cols, maxRun, maxDiagonalRun, budget, nodeCap) {
+  function enumerateLineLayouts(rows, cols, maxRun, maxDiagonalRun, budget, nodeCap, start, goal) {
     const total = rows * cols;
-    const protectedSet = protectedIndexes(rows, cols);
+    const points = resolvePoints(rows, cols, start, goal);
+    const protectedSet = protectedIndexes(rows, cols, points.start, points.goal);
     const byteLen = Math.ceil(total / 8);
     const traps = new Uint8Array(total);
     const minPerCol = rows > maxRun ? Math.ceil((rows - maxRun) / (maxRun + 1)) : 0;
     const useDiagonals = maxDiagonalRun > 0;
 
-    const points = startAndGoal(rows, cols);
     const startIndex = points.start.r * cols + points.start.c;
     const goalIndex = points.goal.r * cols + points.goal.c;
     const bfsDist = new Int32Array(total);
@@ -716,8 +754,26 @@
     return { count: count, byteLen: byteLen, bytes: bytes, pathLen: pathLen };
   }
 
-  function getLineSpace(rows, cols, maxRun, maxDiagonalRun, budget) {
-    const key = rows + 'x' + cols + '|' + maxRun + '|' + maxDiagonalRun + '|' + budget;
+  function getLineSpace(rows, cols, maxRun, maxDiagonalRun, budget, start, goal) {
+    const points = resolvePoints(rows, cols, start, goal);
+    const key =
+      rows +
+      'x' +
+      cols +
+      '|' +
+      maxRun +
+      '|' +
+      maxDiagonalRun +
+      '|' +
+      budget +
+      '|' +
+      points.start.r +
+      ',' +
+      points.start.c +
+      '|' +
+      points.goal.r +
+      ',' +
+      points.goal.c;
     if (lineSpaceCache.has(key)) {
       return lineSpaceCache.get(key);
     }
@@ -727,7 +783,9 @@
       maxRun,
       maxDiagonalRun,
       budget,
-      LIMITS.lineNodeCap
+      LIMITS.lineNodeCap,
+      points.start,
+      points.goal
     );
     lineSpaceCache.set(key, space);
     return space;
@@ -738,7 +796,7 @@
     const traps = options.traps;
     const rng = options.rng;
     const path = options.path;
-    const points = startAndGoal(rows, cols);
+    const points = resolvePoints(rows, cols, options.start, options.goal);
     const trapCount = countTraps(traps);
 
     return {
@@ -767,21 +825,22 @@
   function randomMonotonePath(rng, rows, cols, start, goal) {
     let row = start.r;
     let col = start.c;
+    const rowStep = goal.r > start.r ? 1 : -1;
     const cells = [{ r: row, c: col }];
 
     while (row !== goal.r || col !== goal.c) {
-      const canGoUp = row > goal.r;
-      const canGoRight = col < goal.c;
-      let goUp;
+      const canMoveRow = row !== goal.r;
+      const canMoveCol = col !== goal.c;
+      let moveRow;
 
-      if (canGoUp && canGoRight) {
-        goUp = rng() < 0.5;
+      if (canMoveRow && canMoveCol) {
+        moveRow = rng() < 0.5;
       } else {
-        goUp = canGoUp;
+        moveRow = canMoveRow;
       }
 
-      if (goUp) {
-        row -= 1;
+      if (moveRow) {
+        row += rowStep;
       } else {
         col += 1;
       }
@@ -820,10 +879,13 @@
       settings.seen instanceof Set
         ? settings.seen
         : new Set(Array.isArray(settings.seen) ? settings.seen : []);
-    const points = startAndGoal(rows, cols);
+    const points =
+      settings.start && settings.goal
+        ? resolvePoints(rows, cols, settings.start, settings.goal)
+        : startAndGoal(rows, cols, makeRng(seed + '|startgoal'));
     const start = points.start;
     const goal = points.goal;
-    const protectedSet = protectedIndexes(rows, cols);
+    const protectedSet = protectedIndexes(rows, cols, start, goal);
     const total = rows * cols;
     const freeTiles = total - protectedSet.size;
     const targetTraps = Math.max(1, Math.round(freeTiles * density));
@@ -833,7 +895,7 @@
         eligibleTiles.push(i);
       }
     }
-    const manhattan = rows - 1 + (cols - 1);
+    const manhattan = Math.abs(start.r - goal.r) + Math.abs(start.c - goal.c);
     let attempts = 0;
 
     function placeExactTraps(rng, pool) {
@@ -868,7 +930,7 @@
         return null;
       }
 
-      const fingerprint = fingerprintLayout(rows, cols, traps);
+      const fingerprint = fingerprintLayout(rows, cols, traps, start, goal);
       if (seen.has(fingerprint)) {
         return null;
       }
@@ -876,38 +938,42 @@
       return { traps: traps, path: path, fingerprint: fingerprint };
     }
 
-    const phases = minDetour > 0 ? [minDetour, 0] : [0];
+    if (maxSafeRun === 0) {
+      const phases = minDetour > 0 ? [minDetour, 0] : [0];
 
-    for (let p = 0; p < phases.length; p += 1) {
-      const requiredDetour = phases[p];
+      for (let p = 0; p < phases.length; p += 1) {
+        const requiredDetour = phases[p];
 
-      for (let s = 0; s < LIMITS.maxSeedsPerPhase; s += 1) {
-        const seedUsed = seed + '|d' + requiredDetour + '|s' + s;
-        const rng = makeRng(seedUsed);
+        for (let s = 0; s < LIMITS.maxSeedsPerPhase; s += 1) {
+          const seedUsed = seed + '|d' + requiredDetour + '|s' + s;
+          const rng = makeRng(seedUsed);
 
-        for (let a = 0; a < LIMITS.maxAttemptsPerSeed; a += 1) {
-          const candidate = tryRandomLayout(rng, requiredDetour);
-          if (candidate) {
-            return finalize({
-              rows: rows,
-              cols: cols,
-              traps: candidate.traps,
-              rng: rng,
-              path: candidate.path,
-              fingerprint: candidate.fingerprint,
-              seedUsed: seedUsed,
-              density: density,
-              attempts: attempts,
-              carved: false,
-              maxSafeRun: maxSafeRun, maxDiagonalRun: maxDiagonalRun
-            });
+          for (let a = 0; a < LIMITS.maxAttemptsPerSeed; a += 1) {
+            const candidate = tryRandomLayout(rng, requiredDetour);
+            if (candidate) {
+              return finalize({
+                rows: rows,
+                cols: cols,
+                start: start,
+                goal: goal,
+                traps: candidate.traps,
+                rng: rng,
+                path: candidate.path,
+                fingerprint: candidate.fingerprint,
+                seedUsed: seedUsed,
+                density: density,
+                attempts: attempts,
+                carved: false,
+                maxSafeRun: maxSafeRun, maxDiagonalRun: maxDiagonalRun
+              });
+            }
           }
         }
       }
     }
 
     if (maxSafeRun > 0) {
-      const budgetDeltas = [0, -1, 1, -2, 2];
+      const budgetDeltas = [0, 1, -1, 2, -2];
       for (let d = 3; d <= LIMITS.lineBudgetSpread; d += 1) {
         budgetDeltas.push(d);
       }
@@ -927,7 +993,7 @@
         for (let b = 0; b < budgets.length; b += 1) {
           const budget = budgets[b];
 
-          const space = getLineSpace(rows, cols, maxSafeRun, maxDiagonalRun, budget);
+          const space = getLineSpace(rows, cols, maxSafeRun, maxDiagonalRun, budget, start, goal);
           if (!space || space.count === 0) {
             continue;
           }
@@ -957,7 +1023,7 @@
               continue;
             }
 
-            const fingerprint = fingerprintLayout(rows, cols, traps);
+            const fingerprint = fingerprintLayout(rows, cols, traps, start, goal);
             if (seen.has(fingerprint)) {
               continue;
             }
@@ -965,6 +1031,8 @@
             return finalize({
               rows: rows,
               cols: cols,
+              start: start,
+              goal: goal,
               traps: traps,
               rng: rng,
               path: path,
@@ -1036,7 +1104,7 @@
           continue;
         }
 
-        const fingerprint = fingerprintLayout(rows, cols, traps);
+        const fingerprint = fingerprintLayout(rows, cols, traps, start, goal);
         if (seen.has(fingerprint)) {
           continue;
         }
@@ -1044,6 +1112,8 @@
         return finalize({
           rows: rows,
           cols: cols,
+          start: start,
+          goal: goal,
           traps: traps,
           rng: rng,
           path: path,
@@ -1062,10 +1132,12 @@
     return finalize({
       rows: rows,
       cols: cols,
+      start: start,
+      goal: goal,
       traps: empty,
       rng: makeRng(seed + '|empty'),
       path: fallbackPath,
-      fingerprint: fingerprintLayout(rows, cols, empty),
+      fingerprint: fingerprintLayout(rows, cols, empty, start, goal),
       seedUsed: seed + '|empty',
       density: density,
       attempts: attempts,
@@ -1092,7 +1164,5 @@
     startAndGoal: startAndGoal
   };
 });
-
-
 
 
